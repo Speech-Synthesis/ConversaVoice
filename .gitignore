@@ -12,3 +12,8 @@ build/
 .vscode/
 *.log
 .claude/
+
+# Local-only documentation (DO NOT COMMIT)
+MASTER_PROMPT.md
+WORK_LOG.md
+RESUME_CONTEXT.md
