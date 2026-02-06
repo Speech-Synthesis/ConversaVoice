@@ -4,9 +4,13 @@ Provides async interface to Llama 3 for intelligent, emotionally-aware responses
 """
 
 import os
-from dataclasses import dataclass
-from typing import Optional
+import json
+import logging
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +23,25 @@ class GroqConfig:
     model: str = "llama-3.3-70b-versatile"
     temperature: float = 0.7
     max_tokens: int = 1024
+
+
+@dataclass
+class EmotionalResponse:
+    """Parsed response with emotional prosody parameters."""
+    reply: str
+    style: str = "neutral"
+    pitch: str = "0%"
+    rate: str = "1.0"
+    raw_response: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "reply": self.reply,
+            "style": self.style,
+            "pitch": self.pitch,
+            "rate": self.rate
+        }
 
 
 class GroqClient:
@@ -133,3 +156,73 @@ Prosody guidelines:
 - neutral: pitch="0%", rate="1.0"
 
 Important: Only output the JSON object, no additional text."""
+
+    def get_emotional_response(
+        self, user_message: str, context: Optional[str] = None
+    ) -> EmotionalResponse:
+        """
+        Get an emotionally-aware response with prosody parameters.
+
+        Args:
+            user_message: The user's input text.
+            context: Optional conversation context/history.
+
+        Returns:
+            EmotionalResponse with reply and prosody parameters.
+        """
+        try:
+            raw_response = self.chat(user_message, context)
+            return self._parse_response(raw_response)
+        except Exception as e:
+            logger.error(f"Error getting emotional response: {e}")
+            # Return a safe fallback response
+            return EmotionalResponse(
+                reply="I'm sorry, I encountered an issue. Could you please repeat that?",
+                style="empathetic",
+                pitch="-5%",
+                rate="0.9",
+                raw_response=str(e)
+            )
+
+    def _parse_response(self, raw_response: str) -> EmotionalResponse:
+        """
+        Parse the LLM response into an EmotionalResponse.
+
+        Args:
+            raw_response: Raw text from the LLM.
+
+        Returns:
+            Parsed EmotionalResponse object.
+        """
+        try:
+            # Try to extract JSON from the response
+            # Handle cases where LLM might add extra text
+            json_str = raw_response.strip()
+
+            # Find JSON object in response
+            start_idx = json_str.find("{")
+            end_idx = json_str.rfind("}") + 1
+
+            if start_idx != -1 and end_idx > start_idx:
+                json_str = json_str[start_idx:end_idx]
+
+            data = json.loads(json_str)
+
+            return EmotionalResponse(
+                reply=data.get("reply", ""),
+                style=data.get("style", "neutral"),
+                pitch=data.get("pitch", "0%"),
+                rate=data.get("rate", "1.0"),
+                raw_response=raw_response
+            )
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response: {e}")
+            # If JSON parsing fails, use the raw response as the reply
+            return EmotionalResponse(
+                reply=raw_response,
+                style="neutral",
+                pitch="0%",
+                rate="1.0",
+                raw_response=raw_response
+            )

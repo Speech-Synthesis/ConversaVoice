@@ -5,3 +5,5 @@ accelerate
 soundfile
 pyaudio
 numpy
+groq
+python-dotenv
