@@ -79,6 +79,11 @@ class WhisperClient:
         except Exception as e:
             raise STTError(f"Failed to load Whisper model: {e}")
 
+    def _is_speech(self, audio_chunk) -> bool:
+        """Simple voice activity detection."""
+        import numpy as np
+        return np.abs(audio_chunk).mean() > self.silence_threshold
+
     def transcribe_audio(self, audio_array, sample_rate: int = 16000) -> str:
         """
         Transcribe a numpy audio array.
@@ -90,7 +95,17 @@ class WhisperClient:
         Returns:
             Transcribed text
         """
-        pass  # To be implemented in next commit
+        self.load_model()
+
+        # Resample if needed
+        if sample_rate != self.sample_rate:
+            import torch
+            import torchaudio.functional as F
+            audio_tensor = torch.from_numpy(audio_array).float()
+            audio_array = F.resample(audio_tensor, sample_rate, self.sample_rate).numpy()
+
+        result = self.pipe({"array": audio_array, "sampling_rate": self.sample_rate})
+        return result["text"].strip()
 
     def start_listening(self, callback=None) -> None:
         """
@@ -99,8 +114,145 @@ class WhisperClient:
         Args:
             callback: Function to call with transcribed text
         """
-        pass  # To be implemented in next commit
+        import pyaudio
+        import numpy as np
+
+        self.load_model()
+        self._listening = True
+
+        p = pyaudio.PyAudio()
+
+        try:
+            default_device = p.get_default_input_device_info()
+            print(f"Using microphone: {default_device['name']}")
+        except Exception:
+            raise STTError("No microphone found!")
+
+        stream = p.open(
+            format=pyaudio.paFloat32,
+            channels=1,
+            rate=self.sample_rate,
+            input=True,
+            frames_per_buffer=1024
+        )
+
+        print("\n[Listening... Press Ctrl+C to stop]\n")
+
+        audio_buffer = []
+
+        try:
+            while self._listening:
+                # Read audio chunk
+                frames = []
+                for _ in range(0, int(self.sample_rate / 1024 * self.chunk_duration)):
+                    if not self._listening:
+                        break
+                    data = stream.read(1024, exception_on_overflow=False)
+                    frames.append(np.frombuffer(data, dtype=np.float32))
+
+                if not frames:
+                    break
+
+                audio_chunk = np.concatenate(frames)
+
+                # Check for speech
+                if self._is_speech(audio_chunk):
+                    audio_buffer.append(audio_chunk)
+                elif audio_buffer:
+                    # Process accumulated speech
+                    full_audio = np.concatenate(audio_buffer)
+
+                    if len(full_audio) / self.sample_rate >= self.min_speech_duration:
+                        text = self.transcribe_audio(full_audio, self.sample_rate)
+                        if text:
+                            if callback:
+                                callback(text)
+                            else:
+                                print(f"> {text}")
+
+                    audio_buffer = []
+
+        except KeyboardInterrupt:
+            print("\n[Stopped]")
+        finally:
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
 
     def stop_listening(self) -> None:
         """Stop listening from microphone."""
-        pass  # To be implemented in next commit
+        self._listening = False
+
+    def listen_once(self, timeout: float = 10.0) -> str:
+        """
+        Listen for a single utterance and return the transcribed text.
+
+        Args:
+            timeout: Maximum seconds to wait for speech
+
+        Returns:
+            Transcribed text or empty string if timeout
+        """
+        import pyaudio
+        import numpy as np
+        import time
+
+        self.load_model()
+
+        p = pyaudio.PyAudio()
+
+        try:
+            default_device = p.get_default_input_device_info()
+            print(f"Using microphone: {default_device['name']}")
+        except Exception:
+            raise STTError("No microphone found!")
+
+        stream = p.open(
+            format=pyaudio.paFloat32,
+            channels=1,
+            rate=self.sample_rate,
+            input=True,
+            frames_per_buffer=1024
+        )
+
+        print("[Listening for speech...]")
+
+        audio_buffer = []
+        start_time = time.time()
+        speech_detected = False
+
+        try:
+            while True:
+                if time.time() - start_time > timeout:
+                    print("[Timeout - no speech detected]")
+                    break
+
+                # Read audio chunk
+                frames = []
+                for _ in range(0, int(self.sample_rate / 1024 * self.chunk_duration)):
+                    data = stream.read(1024, exception_on_overflow=False)
+                    frames.append(np.frombuffer(data, dtype=np.float32))
+
+                audio_chunk = np.concatenate(frames)
+
+                # Check for speech
+                if self._is_speech(audio_chunk):
+                    speech_detected = True
+                    audio_buffer.append(audio_chunk)
+                elif speech_detected and audio_buffer:
+                    # Speech ended, process it
+                    full_audio = np.concatenate(audio_buffer)
+                    if len(full_audio) / self.sample_rate >= self.min_speech_duration:
+                        text = self.transcribe_audio(full_audio, self.sample_rate)
+                        return text
+                    audio_buffer = []
+                    speech_detected = False
+
+        except KeyboardInterrupt:
+            print("\n[Cancelled]")
+        finally:
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+
+        return ""
