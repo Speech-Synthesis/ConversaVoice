@@ -13,6 +13,7 @@ from enum import Enum
 from .llm import GroqClient
 from .memory import RedisClient, VectorStore
 from .tts import AzureTTSClient, TTSError
+from .stt import WhisperClient, STTError
 
 
 class OrchestratorError(Exception):
@@ -83,6 +84,7 @@ class Orchestrator:
         self._tts_client = None
         self._redis_client = None
         self._vector_store = None
+        self._stt_client = None
 
     @property
     def state(self) -> PipelineState:
@@ -133,6 +135,23 @@ class Orchestrator:
             self._tts_client = AzureTTSClient()
         except Exception as e:
             raise OrchestratorError(f"Failed to initialize TTS: {e}", component="tts")
+
+    async def initialize_stt(self) -> None:
+        """
+        Initialize the STT component (Whisper).
+
+        Call this only if using voice input mode.
+
+        Raises:
+            OrchestratorError: If STT fails to initialize
+        """
+        try:
+            self._stt_client = WhisperClient()
+            # Load model in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._stt_client.load_model)
+        except Exception as e:
+            raise OrchestratorError(f"Failed to initialize STT: {e}", component="stt")
 
     async def _get_llm_response(self, user_input: str) -> tuple[str, str, str, str, bool]:
         """
@@ -275,39 +294,97 @@ class Orchestrator:
                 self._set_state(PipelineState.ERROR)
                 raise OrchestratorError(f"Pipeline error: {e}")
 
+    async def process_voice(self, timeout: float = 10.0, speak: bool = True) -> Optional[PipelineResult]:
+        """
+        Listen for voice input and process through the pipeline.
+
+        Args:
+            timeout: Maximum seconds to wait for speech
+            speak: Whether to speak the response (default True)
+
+        Returns:
+            Pipeline result with response and metadata, or None if no speech detected
+
+        Raises:
+            OrchestratorError: If processing fails
+        """
+        if not self._stt_client:
+            raise OrchestratorError("STT not initialized. Call initialize_stt() first.", component="stt")
+
+        self._set_state(PipelineState.LISTENING)
+
+        # Listen for speech in a thread pool
+        loop = asyncio.get_event_loop()
+        try:
+            text = await loop.run_in_executor(
+                None,
+                lambda: self._stt_client.listen_once(timeout=timeout)
+            )
+        except STTError as e:
+            self._set_state(PipelineState.ERROR)
+            raise OrchestratorError(f"STT error: {e}", component="stt")
+
+        if not text:
+            self._set_state(PipelineState.IDLE)
+            return None
+
+        # Notify transcription callback
+        if self.on_transcription:
+            self.on_transcription(text)
+
+        # Process through the rest of the pipeline
+        return await self.process_text(text, speak=speak)
+
     async def run_interactive(self, use_voice: bool = False) -> None:
         """
         Run the orchestrator in interactive mode.
 
         Args:
-            use_voice: If True, use microphone input (requires transcribe.py)
+            use_voice: If True, use microphone input (Whisper STT)
                        If False, use text input mode
         """
         self._running = True
+        mode = "Voice" if use_voice else "Text"
         print("\n" + "=" * 50)
-        print("ConversaVoice - Interactive Mode")
+        print(f"ConversaVoice - Interactive Mode ({mode})")
         print("=" * 50)
         print(f"Session ID: {self.session_id}")
-        print("Type 'quit' or 'exit' to stop.")
+        if use_voice:
+            print("Speak into your microphone. Press Ctrl+C to stop.")
+        else:
+            print("Type 'quit' or 'exit' to stop.")
         print("=" * 50 + "\n")
 
         await self.initialize()
 
+        if use_voice:
+            await self.initialize_stt()
+
         while self._running:
             try:
-                # Get user input
-                self._set_state(PipelineState.LISTENING)
-                user_input = input("\nYou: ").strip()
+                if use_voice:
+                    # Voice input mode
+                    print("\n[Listening...]")
+                    result = await self.process_voice(timeout=15.0)
 
-                if not user_input:
-                    continue
+                    if result is None:
+                        print("[No speech detected, try again]")
+                        continue
 
-                if user_input.lower() in ("quit", "exit", "q"):
-                    print("\nGoodbye!")
-                    break
+                    print(f"\nYou: {result.user_input}")
+                else:
+                    # Text input mode
+                    self._set_state(PipelineState.LISTENING)
+                    user_input = input("\nYou: ").strip()
 
-                # Process the input
-                result = await self.process_text(user_input)
+                    if not user_input:
+                        continue
+
+                    if user_input.lower() in ("quit", "exit", "q"):
+                        print("\nGoodbye!")
+                        break
+
+                    result = await self.process_text(user_input)
 
                 # Display result info
                 print(f"\nAssistant: {result.assistant_response}")
