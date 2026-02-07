@@ -31,6 +31,11 @@ def main():
         default=None,
         help="Process a single text input and exit"
     )
+    parser.add_argument(
+        "--voice", "-v",
+        action="store_true",
+        help="Use voice input mode (microphone with Whisper STT)"
+    )
 
     args = parser.parse_args()
 
@@ -52,8 +57,8 @@ def main():
 
         asyncio.run(process_single())
     else:
-        # Interactive mode
-        asyncio.run(orchestrator.run_interactive())
+        # Interactive mode (text or voice)
+        asyncio.run(orchestrator.run_interactive(use_voice=args.voice))
 
 
 if __name__ == "__main__":
