@@ -4,12 +4,13 @@ Context-aware voice assistant with emotional intelligence, powered by Distil-Whi
 
 ## Current Features
 
+- **Voice input mode** - Real-time microphone transcription with Whisper STT
 - **Real-time transcription** - Live microphone input with voice activity detection (Distil-Whisper)
 - **Intelligent responses** - Groq API with Llama 3 for emotionally-aware replies
 - **Conversation memory** - Redis-based session storage and context persistence
 - **Repetition detection** - Cosine similarity to detect when users repeat themselves
 - **Emotional speech** - Azure Neural TTS with SSML prosody control
-- **Async orchestrator** - Full pipeline from text input to spoken response
+- **Async orchestrator** - Full pipeline from voice/text input to spoken response
 - **GPU accelerated** - Optimized for NVIDIA GPUs (CUDA)
 
 ## Quick Start
@@ -21,8 +22,11 @@ Context-aware voice assistant with emotional intelligence, powered by Distil-Whi
 # Start Redis (required)
 docker run -d --name redis -p 6379:6379 redis
 
-# Run the full voice assistant (interactive mode)
+# Run the full voice assistant (text mode)
 python main.py
+
+# Run with voice input (microphone)
+python main.py --voice
 
 # Process a single message
 python main.py --text "Hello, how are you?"
@@ -169,6 +173,11 @@ Building a context-aware voice assistant with emotional intelligence:
 - Context-aware responses with memory
 - Real-time emotion adaptation
 - Interactive text mode for testing
+
+### Phase 5: STT Integration - COMPLETE
+- Whisper STT integrated into orchestrator pipeline
+- Voice input mode with `--voice` flag
+- Full loop: Microphone -> Whisper -> LLM -> TTS -> Speaker
 
 ## Tech Stack
 
