@@ -5,9 +5,13 @@ Manages the real-time pipeline: Microphone → Whisper → LLM → TTS → Speak
 """
 
 import asyncio
+import time
 from dataclasses import dataclass
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable
 from enum import Enum
+
+from .llm import GroqClient
+from .memory import RedisClient, VectorStore
 
 
 class PipelineState(Enum):
@@ -98,7 +102,59 @@ class Orchestrator:
 
         Call this before running the pipeline.
         """
-        pass  # Components will be initialized in subsequent commits
+        # Initialize LLM client
+        self._llm_client = GroqClient()
+
+        # Initialize Redis and memory components
+        self._redis_client = RedisClient()
+        self._redis_client.create_session(self.session_id)
+        self._vector_store = VectorStore(self._redis_client)
+
+    async def _get_llm_response(self, user_input: str) -> tuple[str, str, str, str, bool]:
+        """
+        Get response from LLM with context awareness.
+
+        Args:
+            user_input: User's transcribed text
+
+        Returns:
+            Tuple of (reply, style, pitch, rate, is_repetition)
+        """
+        # Check for repetition
+        repetition_result = self._vector_store.check_repetition(
+            self.session_id,
+            user_input
+        )
+        is_repetition = repetition_result.is_repetition
+
+        # Store the user message and its vector
+        self._redis_client.add_message(self.session_id, "user", user_input)
+        self._vector_store.store_vector(self.session_id, user_input)
+
+        # Get conversation context
+        context = self._redis_client.get_context_string(self.session_id)
+
+        # Build context hint for LLM if user is repeating
+        context_hint = ""
+        if is_repetition:
+            context_hint = " The user seems to be repeating themselves - respond with extra patience."
+
+        # Get LLM response
+        response = self._llm_client.get_emotional_response(
+            user_input,
+            context=context + context_hint
+        )
+
+        # Store assistant response
+        self._redis_client.add_message(self.session_id, "assistant", response.reply)
+
+        return (
+            response.reply,
+            response.style,
+            response.pitch,
+            response.rate,
+            is_repetition
+        )
 
     async def shutdown(self) -> None:
         """
@@ -119,7 +175,36 @@ class Orchestrator:
         Returns:
             Pipeline result with response and metadata
         """
-        pass  # Will be implemented in subsequent commits
+        start_time = time.perf_counter()
+
+        async with self._lock:
+            self._set_state(PipelineState.PROCESSING)
+
+            # Notify transcription callback
+            if self.on_transcription:
+                self.on_transcription(text)
+
+            # Get LLM response
+            reply, style, pitch, rate, is_repetition = await self._get_llm_response(text)
+
+            # Notify response callback
+            if self.on_response:
+                self.on_response(reply)
+
+            # Calculate latency
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
+            self._set_state(PipelineState.IDLE)
+
+            return PipelineResult(
+                user_input=text,
+                assistant_response=reply,
+                style=style,
+                pitch=pitch,
+                rate=rate,
+                is_repetition=is_repetition,
+                latency_ms=latency_ms
+            )
 
     async def process_audio(self, audio_data: bytes) -> PipelineResult:
         """
