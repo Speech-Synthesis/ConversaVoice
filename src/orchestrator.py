@@ -12,6 +12,7 @@ from enum import Enum
 
 from .llm import GroqClient
 from .memory import RedisClient, VectorStore
+from .tts import AzureTTSClient, TTSError
 
 
 class PipelineState(Enum):
@@ -110,6 +111,9 @@ class Orchestrator:
         self._redis_client.create_session(self.session_id)
         self._vector_store = VectorStore(self._redis_client)
 
+        # Initialize TTS client
+        self._tts_client = AzureTTSClient()
+
     async def _get_llm_response(self, user_input: str) -> tuple[str, str, str, str, bool]:
         """
         Get response from LLM with context awareness.
@@ -156,6 +160,36 @@ class Orchestrator:
             is_repetition
         )
 
+    async def _speak(
+        self,
+        text: str,
+        style: Optional[str] = None,
+        pitch: Optional[str] = None,
+        rate: Optional[str] = None
+    ) -> None:
+        """
+        Synthesize and speak text using TTS.
+
+        Args:
+            text: Text to speak
+            style: Emotional style (e.g., "empathetic")
+            pitch: Pitch adjustment (e.g., "-5%")
+            rate: Speech rate (e.g., "0.85")
+        """
+        self._set_state(PipelineState.SPEAKING)
+
+        # Run TTS in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self._tts_client.speak_with_llm_params(
+                text=text,
+                style=style,
+                pitch=pitch,
+                rate=rate
+            )
+        )
+
     async def shutdown(self) -> None:
         """
         Shutdown the orchestrator and cleanup resources.
@@ -190,6 +224,9 @@ class Orchestrator:
             # Notify response callback
             if self.on_response:
                 self.on_response(reply)
+
+            # Speak the response
+            await self._speak(reply, style, pitch, rate)
 
             # Calculate latency
             latency_ms = (time.perf_counter() - start_time) * 1000
