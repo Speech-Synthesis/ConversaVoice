@@ -169,21 +169,27 @@ class Orchestrator:
         )
         is_repetition = repetition_result.is_repetition
 
+        # Update context labels (first_time, repetition, frustration)
+        context_labels = self._redis_client.update_context_labels(
+            self.session_id,
+            is_repetition=is_repetition
+        )
+
         # Store the user message in conversation history
         self._redis_client.add_message(self.session_id, "user", user_input)
 
         # Get conversation context
         context = self._redis_client.get_context_string(self.session_id)
 
-        # Build context hint for LLM if user is repeating
-        context_hint = ""
-        if is_repetition:
-            context_hint = " The user seems to be repeating themselves - respond with extra patience."
+        # Get context hint based on labels (first_time, repetition, frustration)
+        context_hint = self._redis_client.get_context_hint(self.session_id)
+        if context_hint:
+            context = f"{context}\n\n[Context: {context_hint}]"
 
         # Get LLM response
         response = self._llm_client.get_emotional_response(
             user_input,
-            context=context + context_hint
+            context=context
         )
 
         # Store assistant response

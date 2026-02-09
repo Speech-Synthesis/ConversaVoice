@@ -251,3 +251,143 @@ class RedisClient:
         })
         logger.info(f"Updated prosody profile: {style}")
         return True
+
+    # Context Labels Methods
+
+    def _context_key(self, session_id: str) -> str:
+        """Generate Redis key for context labels."""
+        return f"context:{session_id}"
+
+    def get_context_labels(self, session_id: str) -> dict:
+        """
+        Get all context labels for a session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with context labels (interaction_type, emotion, turn_count, repetition_count).
+        """
+        key = self._context_key(session_id)
+        labels = self.client.hgetall(key)
+
+        if not labels:
+            # Return defaults for new session
+            return {
+                "interaction_type": "first_time",
+                "emotion": "neutral",
+                "turn_count": "0",
+                "repetition_count": "0"
+            }
+
+        return labels
+
+    def set_context_label(self, session_id: str, label: str, value: str) -> bool:
+        """
+        Set a specific context label.
+
+        Args:
+            session_id: Session identifier.
+            label: Label name (e.g., "emotion", "interaction_type").
+            value: Label value.
+
+        Returns:
+            True if set successfully.
+        """
+        key = self._context_key(session_id)
+        self.client.hset(key, label, value)
+        return True
+
+    def update_context_labels(
+        self,
+        session_id: str,
+        is_repetition: bool = False,
+        detected_emotion: str = None
+    ) -> dict:
+        """
+        Update context labels based on current interaction state.
+
+        Automatically determines interaction_type based on turn count and repetition.
+
+        Args:
+            session_id: Session identifier.
+            is_repetition: Whether the current input is a repetition.
+            detected_emotion: Emotion detected from sentiment analysis (optional).
+
+        Returns:
+            Updated context labels dict.
+        """
+        key = self._context_key(session_id)
+        session_key = self._session_key(session_id)
+
+        # Get current turn count
+        turn_count = self.client.hget(session_key, "turn_count") or "0"
+        turn_count = int(turn_count)
+
+        # Get current repetition count
+        current_rep_count = self.client.hget(key, "repetition_count") or "0"
+        current_rep_count = int(current_rep_count)
+
+        # Determine interaction type
+        if turn_count == 0:
+            interaction_type = "first_time"
+        elif is_repetition:
+            interaction_type = "repetition"
+            current_rep_count += 1
+        else:
+            interaction_type = "continuing"
+
+        # Determine emotion (frustration from repeated repetitions)
+        if detected_emotion:
+            emotion = detected_emotion
+        elif current_rep_count >= 2:
+            emotion = "frustrated"
+        elif is_repetition:
+            emotion = "confused"
+        else:
+            emotion = "neutral"
+
+        # Update all labels
+        labels = {
+            "interaction_type": interaction_type,
+            "emotion": emotion,
+            "turn_count": str(turn_count),
+            "repetition_count": str(current_rep_count)
+        }
+
+        self.client.hset(key, mapping=labels)
+        logger.debug(f"Updated context labels for {session_id}: {labels}")
+
+        return labels
+
+    def get_context_hint(self, session_id: str) -> str:
+        """
+        Get a formatted context hint string for LLM.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Formatted hint string describing the user's context state.
+        """
+        labels = self.get_context_labels(session_id)
+
+        hints = []
+
+        # Interaction type hint
+        if labels.get("interaction_type") == "first_time":
+            hints.append("This is the user's first message in this session.")
+        elif labels.get("interaction_type") == "repetition":
+            rep_count = labels.get("repetition_count", "1")
+            hints.append(f"The user is repeating themselves (repeat #{rep_count}).")
+
+        # Emotion hint
+        emotion = labels.get("emotion", "neutral")
+        if emotion == "frustrated":
+            hints.append("The user appears frustrated - be direct and helpful.")
+        elif emotion == "confused":
+            hints.append("The user seems confused - explain clearly and patiently.")
+        elif emotion == "angry":
+            hints.append("The user is angry - stay calm and focus on resolution.")
+
+        return " ".join(hints) if hints else ""
