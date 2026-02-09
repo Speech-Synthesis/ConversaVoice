@@ -198,7 +198,7 @@ class RedisClient:
         default_profiles = {
             "neutral": {"pitch": "0%", "rate": "1.0", "volume": "medium"},
             "cheerful": {"pitch": "+5%", "rate": "1.1", "volume": "medium"},
-            "patient": {"pitch": "-3%", "rate": "0.9", "volume": "medium"},
+            "patient": {"pitch": "-5%", "rate": "0.9", "volume": "medium"},
             "empathetic": {"pitch": "-5%", "rate": "0.85", "volume": "medium"},
             "de_escalate": {"pitch": "-10%", "rate": "0.8", "volume": "soft"},
         }
