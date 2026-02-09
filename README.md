@@ -77,6 +77,36 @@ if result.is_repetition:
     print(f"User is repeating (similarity: {result.score:.0%})")
 ```
 
+## Prosody Profiles (Redis)
+
+Emotional prosody parameters are stored in Redis and fetched by style label:
+
+```python
+from src.memory import RedisClient
+
+redis = RedisClient()
+
+# Initialize default profiles (called automatically on startup)
+redis.init_prosody_profiles()
+
+# Get prosody for a style
+prosody = redis.get_prosody("empathetic")
+# Returns: {"pitch": "-5%", "rate": "0.85", "volume": "medium"}
+
+# Update a prosody profile
+redis.set_prosody("empathetic", pitch="-8%", rate="0.8", volume="soft")
+```
+
+**Default Profiles:**
+
+| Style | Pitch | Rate | Volume |
+|-------|-------|------|--------|
+| neutral | 0% | 1.0 | medium |
+| cheerful | +5% | 1.1 | medium |
+| patient | -3% | 0.9 | medium |
+| empathetic | -5% | 0.85 | medium |
+| de_escalate | -10% | 0.8 | soft |
+
 ## TTS Usage (Azure)
 
 ```python
@@ -88,11 +118,11 @@ tts = AzureTTSClient()
 # Speak with emotional profile
 tts.speak("I understand your concern.", profile=ProsodyProfile.EMPATHETIC)
 
-# Speak with LLM response parameters
+# Speak with style (prosody fetched from Redis by orchestrator)
 tts.speak_with_llm_params(
     text="I hear you.",
     style="empathetic",
-    pitch="-5%",
+    pitch="-5%",  # These come from Redis lookup
     rate="0.85"
 )
 
