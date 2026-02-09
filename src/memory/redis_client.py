@@ -91,7 +91,7 @@ class RedisClient:
 
     def create_session(self, session_id: str, ttl: int = 3600) -> bool:
         """
-        Create a new conversation session.
+        Create a new conversation session with metadata.
 
         Args:
             session_id: Unique session identifier.
@@ -100,8 +100,15 @@ class RedisClient:
         Returns:
             True if session created successfully.
         """
+        import time
         key = self._session_key(session_id)
-        self.client.hset(key, mapping={"created": "true", "turn_count": "0"})
+        self.client.hset(key, mapping={
+            "created": "true",
+            "turn_count": "0",
+            "start_time": str(int(time.time())),
+            "error_count": "0",
+            "last_activity": str(int(time.time()))
+        })
         self.client.expire(key, ttl)
         logger.info(f"Created session: {session_id}")
         return True
@@ -119,13 +126,15 @@ class RedisClient:
             Number of messages in history.
         """
         import json
+        import time
         key = self._history_key(session_id)
         message = json.dumps({"role": role, "content": content})
         length = self.client.rpush(key, message)
 
-        # Update turn count
+        # Update turn count and last activity
         session_key = self._session_key(session_id)
         self.client.hincrby(session_key, "turn_count", 1)
+        self.client.hset(session_key, "last_activity", str(int(time.time())))
 
         return length
 
@@ -179,8 +188,84 @@ class RedisClient:
         """
         self.client.delete(self._session_key(session_id))
         self.client.delete(self._history_key(session_id))
+        self.client.delete(self._context_key(session_id))
         logger.info(f"Cleared session: {session_id}")
         return True
+
+    # Session Metadata Methods
+
+    def record_error(self, session_id: str, error_type: str = "general") -> int:
+        """
+        Record an error in the session.
+
+        Args:
+            session_id: Session identifier.
+            error_type: Type of error (e.g., "tts", "llm", "stt").
+
+        Returns:
+            Total error count for the session.
+        """
+        session_key = self._session_key(session_id)
+        count = self.client.hincrby(session_key, "error_count", 1)
+        self.client.hset(session_key, "last_error", error_type)
+        logger.warning(f"Session {session_id} error #{count}: {error_type}")
+        return count
+
+    def get_session_metadata(self, session_id: str) -> dict:
+        """
+        Get full session metadata.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with session metadata including duration, turn_count, errors.
+        """
+        import time
+        session_key = self._session_key(session_id)
+        data = self.client.hgetall(session_key)
+
+        if not data:
+            return {}
+
+        # Calculate session duration
+        start_time = int(data.get("start_time", 0))
+        last_activity = int(data.get("last_activity", start_time))
+        current_time = int(time.time())
+
+        return {
+            "session_id": session_id,
+            "turn_count": int(data.get("turn_count", 0)),
+            "error_count": int(data.get("error_count", 0)),
+            "start_time": start_time,
+            "last_activity": last_activity,
+            "duration_seconds": last_activity - start_time if start_time else 0,
+            "idle_seconds": current_time - last_activity if last_activity else 0,
+            "last_error": data.get("last_error", None)
+        }
+
+    def get_session_summary(self, session_id: str) -> str:
+        """
+        Get a human-readable session summary.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Formatted summary string.
+        """
+        meta = self.get_session_metadata(session_id)
+        if not meta:
+            return "No session data available."
+
+        duration = meta["duration_seconds"]
+        mins, secs = divmod(duration, 60)
+
+        summary = f"Session: {meta['turn_count']} turns, {mins}m {secs}s"
+        if meta["error_count"] > 0:
+            summary += f", {meta['error_count']} errors"
+
+        return summary
 
     # Prosody Profile Methods
 
@@ -198,7 +283,7 @@ class RedisClient:
         default_profiles = {
             "neutral": {"pitch": "0%", "rate": "1.0", "volume": "medium"},
             "cheerful": {"pitch": "+5%", "rate": "1.1", "volume": "medium"},
-            "patient": {"pitch": "-3%", "rate": "0.9", "volume": "medium"},
+            "patient": {"pitch": "-5%", "rate": "0.9", "volume": "medium"},
             "empathetic": {"pitch": "-5%", "rate": "0.85", "volume": "medium"},
             "de_escalate": {"pitch": "-10%", "rate": "0.8", "volume": "soft"},
         }
@@ -251,3 +336,143 @@ class RedisClient:
         })
         logger.info(f"Updated prosody profile: {style}")
         return True
+
+    # Context Labels Methods
+
+    def _context_key(self, session_id: str) -> str:
+        """Generate Redis key for context labels."""
+        return f"context:{session_id}"
+
+    def get_context_labels(self, session_id: str) -> dict:
+        """
+        Get all context labels for a session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with context labels (interaction_type, emotion, turn_count, repetition_count).
+        """
+        key = self._context_key(session_id)
+        labels = self.client.hgetall(key)
+
+        if not labels:
+            # Return defaults for new session
+            return {
+                "interaction_type": "first_time",
+                "emotion": "neutral",
+                "turn_count": "0",
+                "repetition_count": "0"
+            }
+
+        return labels
+
+    def set_context_label(self, session_id: str, label: str, value: str) -> bool:
+        """
+        Set a specific context label.
+
+        Args:
+            session_id: Session identifier.
+            label: Label name (e.g., "emotion", "interaction_type").
+            value: Label value.
+
+        Returns:
+            True if set successfully.
+        """
+        key = self._context_key(session_id)
+        self.client.hset(key, label, value)
+        return True
+
+    def update_context_labels(
+        self,
+        session_id: str,
+        is_repetition: bool = False,
+        detected_emotion: str = None
+    ) -> dict:
+        """
+        Update context labels based on current interaction state.
+
+        Automatically determines interaction_type based on turn count and repetition.
+
+        Args:
+            session_id: Session identifier.
+            is_repetition: Whether the current input is a repetition.
+            detected_emotion: Emotion detected from sentiment analysis (optional).
+
+        Returns:
+            Updated context labels dict.
+        """
+        key = self._context_key(session_id)
+        session_key = self._session_key(session_id)
+
+        # Get current turn count
+        turn_count = self.client.hget(session_key, "turn_count") or "0"
+        turn_count = int(turn_count)
+
+        # Get current repetition count
+        current_rep_count = self.client.hget(key, "repetition_count") or "0"
+        current_rep_count = int(current_rep_count)
+
+        # Determine interaction type
+        if turn_count == 0:
+            interaction_type = "first_time"
+        elif is_repetition:
+            interaction_type = "repetition"
+            current_rep_count += 1
+        else:
+            interaction_type = "continuing"
+
+        # Determine emotion (frustration from repeated repetitions)
+        if detected_emotion:
+            emotion = detected_emotion
+        elif current_rep_count >= 2:
+            emotion = "frustrated"
+        elif is_repetition:
+            emotion = "confused"
+        else:
+            emotion = "neutral"
+
+        # Update all labels
+        labels = {
+            "interaction_type": interaction_type,
+            "emotion": emotion,
+            "turn_count": str(turn_count),
+            "repetition_count": str(current_rep_count)
+        }
+
+        self.client.hset(key, mapping=labels)
+        logger.debug(f"Updated context labels for {session_id}: {labels}")
+
+        return labels
+
+    def get_context_hint(self, session_id: str) -> str:
+        """
+        Get a formatted context hint string for LLM.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Formatted hint string describing the user's context state.
+        """
+        labels = self.get_context_labels(session_id)
+
+        hints = []
+
+        # Interaction type hint
+        if labels.get("interaction_type") == "first_time":
+            hints.append("This is the user's first message in this session.")
+        elif labels.get("interaction_type") == "repetition":
+            rep_count = labels.get("repetition_count", "1")
+            hints.append(f"The user is repeating themselves (repeat #{rep_count}).")
+
+        # Emotion hint
+        emotion = labels.get("emotion", "neutral")
+        if emotion == "frustrated":
+            hints.append("The user appears frustrated - be direct and helpful.")
+        elif emotion == "confused":
+            hints.append("The user seems confused - explain clearly and patiently.")
+        elif emotion == "angry":
+            hints.append("The user is angry - stay calm and focus on resolution.")
+
+        return " ".join(hints) if hints else ""

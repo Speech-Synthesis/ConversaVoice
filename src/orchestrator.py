@@ -14,6 +14,7 @@ from .llm import GroqClient
 from .memory import RedisClient, VectorStore
 from .tts import AzureTTSClient, TTSError
 from .stt import WhisperClient, STTError
+from .nlp import SentimentAnalyzer
 
 
 class OrchestratorError(Exception):
@@ -83,6 +84,7 @@ class Orchestrator:
         self._redis_client = None
         self._vector_store = None
         self._stt_client = None
+        self._sentiment_analyzer = None
 
     @property
     def state(self) -> PipelineState:
@@ -135,6 +137,9 @@ class Orchestrator:
         except Exception as e:
             raise OrchestratorError(f"Failed to initialize TTS: {e}", component="tts")
 
+        # Initialize sentiment analyzer (lightweight, no external deps required)
+        self._sentiment_analyzer = SentimentAnalyzer()
+
     async def initialize_stt(self) -> None:
         """
         Initialize the STT component (Whisper).
@@ -169,21 +174,33 @@ class Orchestrator:
         )
         is_repetition = repetition_result.is_repetition
 
+        # Analyze sentiment for emotion detection
+        detected_emotion = None
+        if self._sentiment_analyzer:
+            detected_emotion = self._sentiment_analyzer.get_emotion_for_context(user_input)
+
+        # Update context labels (first_time, repetition, frustration)
+        context_labels = self._redis_client.update_context_labels(
+            self.session_id,
+            is_repetition=is_repetition,
+            detected_emotion=detected_emotion
+        )
+
         # Store the user message in conversation history
         self._redis_client.add_message(self.session_id, "user", user_input)
 
         # Get conversation context
         context = self._redis_client.get_context_string(self.session_id)
 
-        # Build context hint for LLM if user is repeating
-        context_hint = ""
-        if is_repetition:
-            context_hint = " The user seems to be repeating themselves - respond with extra patience."
+        # Get context hint based on labels (first_time, repetition, frustration)
+        context_hint = self._redis_client.get_context_hint(self.session_id)
+        if context_hint:
+            context = f"{context}\n\n[Context: {context_hint}]"
 
         # Get LLM response
         response = self._llm_client.get_emotional_response(
             user_input,
-            context=context + context_hint
+            context=context
         )
 
         # Store assistant response
@@ -267,6 +284,7 @@ class Orchestrator:
                     try:
                         await self._speak(reply, style)
                     except TTSError as e:
+                        self._redis_client.record_error(self.session_id, "tts")
                         print(f"  [TTS Warning: {e}]")
 
                 # Calculate latency
@@ -284,6 +302,7 @@ class Orchestrator:
 
             except Exception as e:
                 self._set_state(PipelineState.ERROR)
+                self._redis_client.record_error(self.session_id, "pipeline")
                 raise OrchestratorError(f"Pipeline error: {e}")
 
     async def process_voice(self, timeout: float = 10.0, speak: bool = True) -> Optional[PipelineResult]:
@@ -314,6 +333,7 @@ class Orchestrator:
             )
         except STTError as e:
             self._set_state(PipelineState.ERROR)
+            self._redis_client.record_error(self.session_id, "stt")
             raise OrchestratorError(f"STT error: {e}", component="stt")
 
         if not text:
