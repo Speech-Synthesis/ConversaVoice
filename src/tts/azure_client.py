@@ -101,9 +101,9 @@ class AzureTTSClient:
             region=self.speech_region
         )
 
-        # Set output format to high-quality audio
+        # Use PCM format for direct speaker playback (MP3 doesn't play to speakers)
         config.set_speech_synthesis_output_format(
-            speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
+            speechsdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm
         )
 
         return config
