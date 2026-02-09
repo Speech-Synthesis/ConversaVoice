@@ -284,6 +284,7 @@ class Orchestrator:
                     try:
                         await self._speak(reply, style)
                     except TTSError as e:
+                        self._redis_client.record_error(self.session_id, "tts")
                         print(f"  [TTS Warning: {e}]")
 
                 # Calculate latency
@@ -301,6 +302,7 @@ class Orchestrator:
 
             except Exception as e:
                 self._set_state(PipelineState.ERROR)
+                self._redis_client.record_error(self.session_id, "pipeline")
                 raise OrchestratorError(f"Pipeline error: {e}")
 
     async def process_voice(self, timeout: float = 10.0, speak: bool = True) -> Optional[PipelineResult]:
@@ -331,6 +333,7 @@ class Orchestrator:
             )
         except STTError as e:
             self._set_state(PipelineState.ERROR)
+            self._redis_client.record_error(self.session_id, "stt")
             raise OrchestratorError(f"STT error: {e}", component="stt")
 
         if not text:

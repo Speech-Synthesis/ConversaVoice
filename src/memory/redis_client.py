@@ -91,7 +91,7 @@ class RedisClient:
 
     def create_session(self, session_id: str, ttl: int = 3600) -> bool:
         """
-        Create a new conversation session.
+        Create a new conversation session with metadata.
 
         Args:
             session_id: Unique session identifier.
@@ -100,8 +100,15 @@ class RedisClient:
         Returns:
             True if session created successfully.
         """
+        import time
         key = self._session_key(session_id)
-        self.client.hset(key, mapping={"created": "true", "turn_count": "0"})
+        self.client.hset(key, mapping={
+            "created": "true",
+            "turn_count": "0",
+            "start_time": str(int(time.time())),
+            "error_count": "0",
+            "last_activity": str(int(time.time()))
+        })
         self.client.expire(key, ttl)
         logger.info(f"Created session: {session_id}")
         return True
@@ -119,13 +126,15 @@ class RedisClient:
             Number of messages in history.
         """
         import json
+        import time
         key = self._history_key(session_id)
         message = json.dumps({"role": role, "content": content})
         length = self.client.rpush(key, message)
 
-        # Update turn count
+        # Update turn count and last activity
         session_key = self._session_key(session_id)
         self.client.hincrby(session_key, "turn_count", 1)
+        self.client.hset(session_key, "last_activity", str(int(time.time())))
 
         return length
 
@@ -179,8 +188,84 @@ class RedisClient:
         """
         self.client.delete(self._session_key(session_id))
         self.client.delete(self._history_key(session_id))
+        self.client.delete(self._context_key(session_id))
         logger.info(f"Cleared session: {session_id}")
         return True
+
+    # Session Metadata Methods
+
+    def record_error(self, session_id: str, error_type: str = "general") -> int:
+        """
+        Record an error in the session.
+
+        Args:
+            session_id: Session identifier.
+            error_type: Type of error (e.g., "tts", "llm", "stt").
+
+        Returns:
+            Total error count for the session.
+        """
+        session_key = self._session_key(session_id)
+        count = self.client.hincrby(session_key, "error_count", 1)
+        self.client.hset(session_key, "last_error", error_type)
+        logger.warning(f"Session {session_id} error #{count}: {error_type}")
+        return count
+
+    def get_session_metadata(self, session_id: str) -> dict:
+        """
+        Get full session metadata.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with session metadata including duration, turn_count, errors.
+        """
+        import time
+        session_key = self._session_key(session_id)
+        data = self.client.hgetall(session_key)
+
+        if not data:
+            return {}
+
+        # Calculate session duration
+        start_time = int(data.get("start_time", 0))
+        last_activity = int(data.get("last_activity", start_time))
+        current_time = int(time.time())
+
+        return {
+            "session_id": session_id,
+            "turn_count": int(data.get("turn_count", 0)),
+            "error_count": int(data.get("error_count", 0)),
+            "start_time": start_time,
+            "last_activity": last_activity,
+            "duration_seconds": last_activity - start_time if start_time else 0,
+            "idle_seconds": current_time - last_activity if last_activity else 0,
+            "last_error": data.get("last_error", None)
+        }
+
+    def get_session_summary(self, session_id: str) -> str:
+        """
+        Get a human-readable session summary.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Formatted summary string.
+        """
+        meta = self.get_session_metadata(session_id)
+        if not meta:
+            return "No session data available."
+
+        duration = meta["duration_seconds"]
+        mins, secs = divmod(duration, 60)
+
+        summary = f"Session: {meta['turn_count']} turns, {mins}m {secs}s"
+        if meta["error_count"] > 0:
+            summary += f", {meta['error_count']} errors"
+
+        return summary
 
     # Prosody Profile Methods
 
