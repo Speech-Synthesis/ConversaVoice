@@ -53,10 +53,9 @@ from src.llm import GroqClient
 client = GroqClient()
 response = client.get_emotional_response("Where is my order?")
 
-print(response.reply)   # "I understand your concern..."
-print(response.style)   # "empathetic"
-print(response.pitch)   # "-5%"
-print(response.rate)    # "0.85"
+print(response.reply)          # "I understand your concern..."
+print(response.style)          # "empathetic" (prosody fetched from Redis)
+print(response.emphasis_words) # ["order"] (words to stress in speech)
 ```
 
 ## Memory Usage (Redis)
@@ -103,7 +102,7 @@ redis.set_prosody("empathetic", pitch="-8%", rate="0.8", volume="soft")
 |-------|-------|------|--------|
 | neutral | 0% | 1.0 | medium |
 | cheerful | +5% | 1.1 | medium |
-| patient | -3% | 0.9 | medium |
+| patient | -5% | 0.9 | medium |
 | empathetic | -5% | 0.85 | medium |
 | de_escalate | -10% | 0.8 | soft |
 
@@ -128,6 +127,78 @@ tts.speak_with_llm_params(
 
 # Save to file
 tts.synthesize_to_file("Hello world", "output.mp3")
+```
+
+## SSML Features
+
+ConversaVoice uses advanced SSML (Speech Synthesis Markup Language) for expressive speech output.
+
+### Express-As Styles
+
+Azure Neural voices support emotional styles via `<mstts:express-as>`:
+
+```python
+from src.tts import SSMLBuilder
+
+builder = SSMLBuilder()
+
+# Build SSML with style and intensity
+ssml = builder.build(
+    text="I understand how frustrating this must be.",
+    style="empathetic",
+    styledegree=1.3  # 1.0 = normal, 1.5 = intense, 0.7 = subtle
+)
+```
+
+**Supported Styles:** empathetic, cheerful, calm, angry, sad, excited, friendly, hopeful, and [30+ more Azure styles](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-voice).
+
+**Style Intensity (styledegree):**
+- `0.01 - 0.99`: Subtle expression
+- `1.0`: Default intensity
+- `1.01 - 2.0`: Intensified expression
+
+### Word Emphasis
+
+Add stress to key words for clearer communication:
+
+```python
+from src.tts import SSMLBuilder, EmphasisLevel
+
+builder = SSMLBuilder()
+
+# Emphasize specific words
+ssml = builder.build_with_emphasis(
+    text="Your order will arrive by Friday.",
+    emphasis_words=["Friday"],
+    emphasis_level=EmphasisLevel.STRONG
+)
+
+# Or use inline markers in text
+ssml = builder.apply_emphasis_markers(
+    "Your order will arrive by *Friday*."  # *strong*, _moderate_, ~reduced~
+)
+```
+
+**Emphasis Levels:**
+| Level | Effect | Marker |
+|-------|--------|--------|
+| STRONG | Loudest stress | `*word*` |
+| MODERATE | Normal emphasis | `_word_` |
+| REDUCED | Softer/quieter | `~word~` |
+
+### LLM Integration
+
+The LLM returns `emphasis_words` for automatic speech emphasis:
+
+```python
+from src.llm import GroqClient
+
+client = GroqClient()
+response = client.get_emotional_response("What laptop should I buy for AI?")
+
+print(response.reply)          # "I recommend the NVIDIA RTX 4060..."
+print(response.style)          # "cheerful"
+print(response.emphasis_words) # ["NVIDIA", "RTX 4060"]
 ```
 
 ## Full Pipeline (Orchestrator)
@@ -208,6 +279,17 @@ Building a context-aware voice assistant with emotional intelligence:
 - Whisper STT integrated into orchestrator pipeline
 - Voice input mode with `--voice` flag
 - Full loop: Microphone -> Whisper -> LLM -> TTS -> Speaker
+
+### Phase 6: Context Enhancements - COMPLETE
+- Context labels: first_time, continuing, repetition, frustration
+- Sentiment analysis for emotion detection (happy, frustrated, confused, angry)
+- Session metadata tracking (turn_count, error_count, duration)
+
+### Phase 7: SSML Enhancements - COMPLETE
+- Express-as styles with styledegree intensity control (0.01-2.0)
+- Word emphasis support (strong, moderate, reduced)
+- LLM returns emphasis_words for automatic speech emphasis
+- Inline emphasis markers (*strong*, _moderate_, ~reduced~)
 
 ## Tech Stack
 
