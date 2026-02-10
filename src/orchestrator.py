@@ -2,20 +2,25 @@
 Async Orchestrator for ConversaVoice.
 
 Manages the real-time pipeline: Microphone → Whisper → LLM → TTS → Speaker
+Supports automatic fallback to local services when cloud APIs fail.
 """
 
 import asyncio
 import time
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Callable
 from enum import Enum
 
-from .llm import GroqClient
+from .llm import GroqClient, OllamaClient
 from .memory import RedisClient, VectorStore
-from .tts import AzureTTSClient, TTSError
+from .tts import AzureTTSClient, TTSError, PiperTTSClient, PiperTTSError
 from .stt import WhisperClient, STTError
 from .nlp import SentimentAnalyzer
+from .fallback import FallbackManager, ServiceType, ServiceMode, FallbackConfig
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestratorError(Exception):
@@ -52,6 +57,7 @@ class Orchestrator:
     Async orchestrator for the voice assistant pipeline.
 
     Coordinates: Whisper (STT) → Groq (LLM) → Azure (TTS)
+    Supports automatic fallback to local services (Ollama, Piper).
     """
 
     def __init__(
@@ -61,6 +67,7 @@ class Orchestrator:
         on_transcription: Optional[Callable[[str], None]] = None,
         on_response: Optional[Callable[[str], None]] = None,
         on_token: Optional[Callable[[str], None]] = None,
+        fallback_config: Optional[FallbackConfig] = None,
     ):
         """
         Initialize the orchestrator.
@@ -71,6 +78,7 @@ class Orchestrator:
             on_transcription: Callback when user speech is transcribed
             on_response: Callback when assistant response is ready
             on_token: Callback for each token in streaming mode
+            fallback_config: Configuration for fallback behavior
         """
         self.session_id = session_id or self._generate_session_id()
         self.on_state_change = on_state_change
@@ -82,13 +90,21 @@ class Orchestrator:
         self._running = False
         self._lock = asyncio.Lock()
 
-        # Components (initialized lazily)
+        # Fallback manager for cloud/local switching
+        self._fallback_manager = FallbackManager(fallback_config)
+        self._fallback_manager.set_mode_change_callback(self._on_service_mode_change)
+
+        # Cloud components (initialized lazily)
         self._llm_client = None
         self._tts_client = None
         self._redis_client = None
         self._vector_store = None
         self._stt_client = None
         self._sentiment_analyzer = None
+
+        # Local fallback components
+        self._local_llm_client = None
+        self._local_tts_client = None
 
     @property
     def state(self) -> PipelineState:
@@ -111,35 +127,83 @@ class Orchestrator:
         import uuid
         return f"session-{uuid.uuid4().hex[:8]}"
 
+    def _on_service_mode_change(self, service_type: ServiceType, mode: ServiceMode) -> None:
+        """Handle service mode changes (cloud to local or vice versa)."""
+        logger.info(f"Service {service_type.value} switched to {mode.value}")
+        if self.on_state_change:
+            # Briefly signal state change for mode switch awareness
+            pass  # Could add a callback for mode changes if needed
+
+    def get_fallback_status(self) -> dict:
+        """Get current fallback status for all services."""
+        return self._fallback_manager.get_summary()
+
     async def initialize(self) -> None:
         """
         Initialize all pipeline components.
 
         Call this before running the pipeline.
+        Initializes both cloud and local fallback clients when available.
 
         Raises:
             OrchestratorError: If any component fails to initialize
         """
+        # Initialize cloud LLM client
         try:
-            # Initialize LLM client
             self._llm_client = GroqClient()
+            self._fallback_manager.set_cloud_available(ServiceType.LLM, True)
         except Exception as e:
-            raise OrchestratorError(f"Failed to initialize LLM: {e}", component="llm")
+            logger.warning(f"Failed to initialize cloud LLM: {e}")
+            self._fallback_manager.set_cloud_available(ServiceType.LLM, False)
 
+        # Initialize local LLM fallback (Ollama)
         try:
-            # Initialize Redis and memory components
+            self._local_llm_client = OllamaClient()
+            if self._local_llm_client.is_available():
+                self._fallback_manager.set_local_available(ServiceType.LLM, True)
+                logger.info("Local LLM (Ollama) available as fallback")
+            else:
+                self._local_llm_client = None
+        except Exception as e:
+            logger.debug(f"Local LLM not available: {e}")
+            self._local_llm_client = None
+
+        # Ensure at least one LLM is available
+        if self._llm_client is None and self._local_llm_client is None:
+            raise OrchestratorError("No LLM available (cloud or local)", component="llm")
+
+        # Initialize Redis and memory components
+        try:
             self._redis_client = RedisClient()
             self._redis_client.create_session(self.session_id)
-            self._redis_client.init_prosody_profiles()  # Initialize prosody profiles
+            self._redis_client.init_prosody_profiles()
             self._vector_store = VectorStore(self._redis_client)
         except Exception as e:
             raise OrchestratorError(f"Failed to initialize Redis: {e}", component="memory")
 
+        # Initialize cloud TTS client
         try:
-            # Initialize TTS client
             self._tts_client = AzureTTSClient()
+            self._fallback_manager.set_cloud_available(ServiceType.TTS, True)
         except Exception as e:
-            raise OrchestratorError(f"Failed to initialize TTS: {e}", component="tts")
+            logger.warning(f"Failed to initialize cloud TTS: {e}")
+            self._fallback_manager.set_cloud_available(ServiceType.TTS, False)
+
+        # Initialize local TTS fallback (Piper)
+        try:
+            self._local_tts_client = PiperTTSClient()
+            if self._local_tts_client.is_available():
+                self._fallback_manager.set_local_available(ServiceType.TTS, True)
+                logger.info("Local TTS (Piper) available as fallback")
+            else:
+                self._local_tts_client = None
+        except Exception as e:
+            logger.debug(f"Local TTS not available: {e}")
+            self._local_tts_client = None
+
+        # Ensure at least one TTS is available
+        if self._tts_client is None and self._local_tts_client is None:
+            raise OrchestratorError("No TTS available (cloud or local)", component="tts")
 
         # Initialize sentiment analyzer (lightweight, no external deps required)
         self._sentiment_analyzer = SentimentAnalyzer()
@@ -186,9 +250,15 @@ class Orchestrator:
 
         return f"Current time: {time_str} ({time_of_day}), {day_name}, {date_str}"
 
+    def _get_active_llm_client(self):
+        """Get the currently active LLM client based on fallback status."""
+        if self._fallback_manager.should_use_local(ServiceType.LLM):
+            return self._local_llm_client or self._llm_client
+        return self._llm_client or self._local_llm_client
+
     async def _get_llm_response(self, user_input: str) -> tuple[str, str, bool]:
         """
-        Get response from LLM with context awareness.
+        Get response from LLM with context awareness and fallback support.
 
         Args:
             user_input: User's transcribed text
@@ -240,11 +310,30 @@ class Orchestrator:
         if prefs_hint:
             context = f"{context}\n\n[User Preferences: {prefs_hint}]"
 
-        # Get LLM response
-        response = self._llm_client.get_emotional_response(
-            user_input,
-            context=context
-        )
+        # Get LLM response with fallback support
+        response = None
+        llm_client = self._get_active_llm_client()
+
+        try:
+            response = llm_client.get_emotional_response(user_input, context=context)
+            self._fallback_manager.report_success(ServiceType.LLM)
+        except Exception as e:
+            logger.warning(f"LLM call failed: {e}")
+            self._fallback_manager.report_failure(ServiceType.LLM, str(e))
+
+            # Try fallback if available
+            fallback_client = self._local_llm_client if llm_client == self._llm_client else self._llm_client
+            if fallback_client:
+                try:
+                    response = fallback_client.get_emotional_response(user_input, context=context)
+                    self._fallback_manager.report_success(ServiceType.LLM)
+                except Exception as e2:
+                    logger.error(f"LLM fallback also failed: {e2}")
+                    self._fallback_manager.report_failure(ServiceType.LLM, str(e2))
+                    raise
+
+        if response is None:
+            raise OrchestratorError("No LLM response received", component="llm")
 
         # Store assistant response
         self._redis_client.add_message(self.session_id, "assistant", response.reply)
@@ -262,6 +351,7 @@ class Orchestrator:
     ) -> tuple[str, str, bool]:
         """
         Get response from LLM with streaming for lower latency.
+        Supports fallback to local LLM.
 
         Args:
             user_input: User's transcribed text
@@ -314,16 +404,45 @@ class Orchestrator:
         if prefs_hint:
             context = f"{context}\n\n[User Preferences: {prefs_hint}]"
 
-        # Get LLM response with streaming
+        # Get LLM response with streaming and fallback support
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self._llm_client.get_emotional_response_stream(
-                user_input,
-                context=context,
-                on_token=on_token
+        llm_client = self._get_active_llm_client()
+        response = None
+
+        try:
+            response = await loop.run_in_executor(
+                None,
+                lambda: llm_client.get_emotional_response_stream(
+                    user_input,
+                    context=context,
+                    on_token=on_token
+                )
             )
-        )
+            self._fallback_manager.report_success(ServiceType.LLM)
+        except Exception as e:
+            logger.warning(f"LLM streaming failed: {e}")
+            self._fallback_manager.report_failure(ServiceType.LLM, str(e))
+
+            # Try fallback
+            fallback_client = self._local_llm_client if llm_client == self._llm_client else self._llm_client
+            if fallback_client:
+                try:
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda: fallback_client.get_emotional_response_stream(
+                            user_input,
+                            context=context,
+                            on_token=on_token
+                        )
+                    )
+                    self._fallback_manager.report_success(ServiceType.LLM)
+                except Exception as e2:
+                    logger.error(f"LLM fallback streaming also failed: {e2}")
+                    self._fallback_manager.report_failure(ServiceType.LLM, str(e2))
+                    raise
+
+        if response is None:
+            raise OrchestratorError("No LLM response received", component="llm")
 
         # Store assistant response
         self._redis_client.add_message(self.session_id, "assistant", response.reply)
@@ -334,9 +453,15 @@ class Orchestrator:
             is_repetition
         )
 
+    def _get_active_tts_client(self):
+        """Get the currently active TTS client based on fallback status."""
+        if self._fallback_manager.should_use_local(ServiceType.TTS):
+            return self._local_tts_client or self._tts_client
+        return self._tts_client or self._local_tts_client
+
     async def _speak(self, text: str, style: Optional[str] = None) -> None:
         """
-        Synthesize and speak text using TTS.
+        Synthesize and speak text using TTS with fallback support.
 
         Fetches prosody parameters from Redis based on style label.
 
@@ -349,17 +474,45 @@ class Orchestrator:
         # Fetch prosody from Redis based on style
         prosody = self._redis_client.get_prosody(style or "neutral")
 
-        # Run TTS in a thread pool to avoid blocking
+        # Get active TTS client
+        tts_client = self._get_active_tts_client()
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: self._tts_client.speak_with_llm_params(
-                text=text,
-                style=style,
-                pitch=prosody.get("pitch", "0%"),
-                rate=prosody.get("rate", "1.0")
+
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: tts_client.speak_with_llm_params(
+                    text=text,
+                    style=style,
+                    pitch=prosody.get("pitch", "0%"),
+                    rate=prosody.get("rate", "1.0")
+                )
             )
-        )
+            self._fallback_manager.report_success(ServiceType.TTS)
+        except (TTSError, PiperTTSError) as e:
+            logger.warning(f"TTS failed: {e}")
+            self._fallback_manager.report_failure(ServiceType.TTS, str(e))
+
+            # Try fallback
+            fallback_client = self._local_tts_client if tts_client == self._tts_client else self._tts_client
+            if fallback_client:
+                try:
+                    await loop.run_in_executor(
+                        None,
+                        lambda: fallback_client.speak_with_llm_params(
+                            text=text,
+                            style=style,
+                            pitch=prosody.get("pitch", "0%"),
+                            rate=prosody.get("rate", "1.0")
+                        )
+                    )
+                    self._fallback_manager.report_success(ServiceType.TTS)
+                except Exception as e2:
+                    logger.error(f"TTS fallback also failed: {e2}")
+                    self._fallback_manager.report_failure(ServiceType.TTS, str(e2))
+                    raise
+            else:
+                raise
 
     async def shutdown(self) -> None:
         """
