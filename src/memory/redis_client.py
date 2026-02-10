@@ -138,7 +138,7 @@ class RedisClient:
 
         return length
 
-    def get_history(self, session_id: str, limit: int = 10) -> list:
+    def get_history(self, session_id: str, limit: int = 15) -> list:
         """
         Get recent conversation history.
 
@@ -154,7 +154,7 @@ class RedisClient:
         messages = self.client.lrange(key, -limit, -1)
         return [json.loads(msg) for msg in messages]
 
-    def get_context_string(self, session_id: str, limit: int = 5) -> str:
+    def get_context_string(self, session_id: str, limit: int = 15) -> str:
         """
         Get conversation history as a formatted string for LLM context.
 
