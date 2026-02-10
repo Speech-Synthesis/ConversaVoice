@@ -7,6 +7,7 @@ Manages the real-time pipeline: Microphone → Whisper → LLM → TTS → Speak
 import asyncio
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional, Callable
 from enum import Enum
 
@@ -160,6 +161,31 @@ class Orchestrator:
         except Exception as e:
             raise OrchestratorError(f"Failed to initialize STT: {e}", component="stt")
 
+    def _get_external_context(self) -> str:
+        """
+        Get external context information (date, time, day of week).
+
+        Returns:
+            Formatted string with current date/time context.
+        """
+        now = datetime.now()
+        day_name = now.strftime("%A")
+        date_str = now.strftime("%B %d, %Y")
+        time_str = now.strftime("%I:%M %p")
+
+        # Time of day context
+        hour = now.hour
+        if 5 <= hour < 12:
+            time_of_day = "morning"
+        elif 12 <= hour < 17:
+            time_of_day = "afternoon"
+        elif 17 <= hour < 21:
+            time_of_day = "evening"
+        else:
+            time_of_day = "night"
+
+        return f"Current time: {time_str} ({time_of_day}), {day_name}, {date_str}"
+
     async def _get_llm_response(self, user_input: str) -> tuple[str, str, bool]:
         """
         Get response from LLM with context awareness.
@@ -189,16 +215,30 @@ class Orchestrator:
             detected_emotion=detected_emotion
         )
 
+        # Detect and store user preferences from message
+        detected_prefs = self._redis_client.detect_preferences_from_message(user_input)
+        if detected_prefs:
+            self._redis_client.set_user_preferences(self.session_id, detected_prefs)
+
         # Store the user message in conversation history
         self._redis_client.add_message(self.session_id, "user", user_input)
 
         # Get conversation context
         context = self._redis_client.get_context_string(self.session_id)
 
+        # Add external context (date/time)
+        external_context = self._get_external_context()
+        context = f"[{external_context}]\n\n{context}"
+
         # Get context hint based on labels (first_time, repetition, frustration)
         context_hint = self._redis_client.get_context_hint(self.session_id)
         if context_hint:
             context = f"{context}\n\n[Context: {context_hint}]"
+
+        # Add user preferences hint
+        prefs_hint = self._redis_client.get_preferences_hint(self.session_id)
+        if prefs_hint:
+            context = f"{context}\n\n[User Preferences: {prefs_hint}]"
 
         # Get LLM response
         response = self._llm_client.get_emotional_response(
@@ -249,16 +289,30 @@ class Orchestrator:
             detected_emotion=detected_emotion
         )
 
+        # Detect and store user preferences from message
+        detected_prefs = self._redis_client.detect_preferences_from_message(user_input)
+        if detected_prefs:
+            self._redis_client.set_user_preferences(self.session_id, detected_prefs)
+
         # Store the user message in conversation history
         self._redis_client.add_message(self.session_id, "user", user_input)
 
         # Get conversation context
         context = self._redis_client.get_context_string(self.session_id)
 
+        # Add external context (date/time)
+        external_context = self._get_external_context()
+        context = f"[{external_context}]\n\n{context}"
+
         # Get context hint based on labels
         context_hint = self._redis_client.get_context_hint(self.session_id)
         if context_hint:
             context = f"{context}\n\n[Context: {context_hint}]"
+
+        # Add user preferences hint
+        prefs_hint = self._redis_client.get_preferences_hint(self.session_id)
+        if prefs_hint:
+            context = f"{context}\n\n[User Preferences: {prefs_hint}]"
 
         # Get LLM response with streaming
         loop = asyncio.get_event_loop()

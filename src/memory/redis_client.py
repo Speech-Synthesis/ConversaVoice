@@ -138,7 +138,7 @@ class RedisClient:
 
         return length
 
-    def get_history(self, session_id: str, limit: int = 10) -> list:
+    def get_history(self, session_id: str, limit: int = 15) -> list:
         """
         Get recent conversation history.
 
@@ -154,7 +154,7 @@ class RedisClient:
         messages = self.client.lrange(key, -limit, -1)
         return [json.loads(msg) for msg in messages]
 
-    def get_context_string(self, session_id: str, limit: int = 5) -> str:
+    def get_context_string(self, session_id: str, limit: int = 15) -> str:
         """
         Get conversation history as a formatted string for LLM context.
 
@@ -474,5 +474,166 @@ class RedisClient:
             hints.append("The user seems confused - explain clearly and patiently.")
         elif emotion == "angry":
             hints.append("The user is angry - stay calm and focus on resolution.")
+
+        return " ".join(hints) if hints else ""
+
+    # User Preferences Methods
+
+    def _preferences_key(self, session_id: str) -> str:
+        """Generate Redis key for user preferences."""
+        return f"preferences:{session_id}"
+
+    def get_user_preferences(self, session_id: str) -> dict:
+        """
+        Get all user preferences for a session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with user preferences (preferred_style, verbosity, name, etc.).
+        """
+        key = self._preferences_key(session_id)
+        prefs = self.client.hgetall(key)
+
+        if not prefs:
+            return {
+                "preferred_style": "neutral",
+                "verbosity": "normal",
+                "name": None,
+                "interests": None,
+                "communication_style": "balanced"
+            }
+
+        return prefs
+
+    def set_user_preference(
+        self,
+        session_id: str,
+        key: str,
+        value: str
+    ) -> bool:
+        """
+        Set a specific user preference.
+
+        Args:
+            session_id: Session identifier.
+            key: Preference key (e.g., "preferred_style", "verbosity", "name").
+            value: Preference value.
+
+        Returns:
+            True if set successfully.
+        """
+        pref_key = self._preferences_key(session_id)
+        self.client.hset(pref_key, key, value)
+        logger.debug(f"Set preference {key}={value} for session {session_id}")
+        return True
+
+    def set_user_preferences(
+        self,
+        session_id: str,
+        preferences: dict
+    ) -> bool:
+        """
+        Set multiple user preferences at once.
+
+        Args:
+            session_id: Session identifier.
+            preferences: Dict of preference key-value pairs.
+
+        Returns:
+            True if set successfully.
+        """
+        if not preferences:
+            return False
+
+        pref_key = self._preferences_key(session_id)
+        self.client.hset(pref_key, mapping=preferences)
+        logger.debug(f"Set preferences for session {session_id}: {preferences}")
+        return True
+
+    def detect_preferences_from_message(self, message: str) -> dict:
+        """
+        Detect user preferences from their message.
+
+        Looks for patterns like:
+        - "My name is X" -> name
+        - "Call me X" -> name
+        - "I prefer brief answers" -> verbosity
+        - "Be more detailed" -> verbosity
+
+        Args:
+            message: User message to analyze.
+
+        Returns:
+            Dict of detected preferences (may be empty).
+        """
+        import re
+        detected = {}
+        message_lower = message.lower()
+
+        # Detect name
+        name_patterns = [
+            r"my name is (\w+)",
+            r"call me (\w+)",
+            r"i'm (\w+)",
+            r"i am (\w+)",
+        ]
+        for pattern in name_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                detected["name"] = match.group(1).capitalize()
+                break
+
+        # Detect verbosity preference
+        if any(word in message_lower for word in ["brief", "short", "concise", "quick"]):
+            detected["verbosity"] = "brief"
+        elif any(word in message_lower for word in ["detailed", "explain", "thorough", "elaborate"]):
+            detected["verbosity"] = "detailed"
+
+        # Detect communication style
+        if any(word in message_lower for word in ["formal", "professional"]):
+            detected["communication_style"] = "formal"
+        elif any(word in message_lower for word in ["casual", "friendly", "relaxed"]):
+            detected["communication_style"] = "casual"
+
+        return detected
+
+    def get_preferences_hint(self, session_id: str) -> str:
+        """
+        Get a formatted preferences hint string for LLM.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Formatted hint string describing user preferences.
+        """
+        prefs = self.get_user_preferences(session_id)
+        hints = []
+
+        # Name hint
+        name = prefs.get("name")
+        if name:
+            hints.append(f"User's name is {name}.")
+
+        # Verbosity hint
+        verbosity = prefs.get("verbosity", "normal")
+        if verbosity == "brief":
+            hints.append("User prefers brief, concise answers.")
+        elif verbosity == "detailed":
+            hints.append("User prefers detailed explanations.")
+
+        # Communication style hint
+        style = prefs.get("communication_style", "balanced")
+        if style == "formal":
+            hints.append("Use formal, professional language.")
+        elif style == "casual":
+            hints.append("Use casual, friendly language.")
+
+        # Interests hint
+        interests = prefs.get("interests")
+        if interests:
+            hints.append(f"User interests: {interests}.")
 
         return " ".join(hints) if hints else ""
