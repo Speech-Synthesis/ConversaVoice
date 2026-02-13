@@ -220,18 +220,31 @@ class Orchestrator:
         """
         Initialize the STT component (Whisper).
 
-        Call this only if using voice input mode.
+        Supports both local Whisper (GPU) and Groq Whisper API (cloud).
+        Backend is selected via STT_BACKEND environment variable.
 
         Raises:
             OrchestratorError: If STT fails to initialize
         """
+        import os
+        
+        stt_backend = os.getenv("STT_BACKEND", "groq").lower()
+        
         try:
-            self._stt_client = WhisperClient()
-            # Load model in a thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._stt_client.load_model)
+            if stt_backend == "groq":
+                # Use Groq Whisper API (cloud, no GPU needed)
+                from .stt import GroqWhisperClient
+                self._stt_client = GroqWhisperClient()
+                logger.info("Using Groq Whisper API (cloud)")
+            else:
+                # Use local Whisper (requires GPU)
+                self._stt_client = WhisperClient()
+                # Load model in a thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, self._stt_client.load_model)
+                logger.info("Using local Whisper model (GPU)")
         except Exception as e:
-            raise OrchestratorError(f"Failed to initialize STT: {e}", component="stt")
+            raise OrchestratorError(f"Failed to initialize STT ({stt_backend}): {e}", component="stt")
 
     def _get_external_context(self) -> str:
         """
