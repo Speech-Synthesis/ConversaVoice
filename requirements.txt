@@ -11,3 +11,5 @@ redis
 sentence-transformers
 azure-cognitiveservices-speech
 streamlit
+sounddevice
+scipy
