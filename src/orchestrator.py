@@ -50,6 +50,8 @@ class PipelineResult:
     style: Optional[str] = None
     is_repetition: bool = False
     latency_ms: float = 0.0
+    pitch: Optional[str] = None
+    rate: Optional[str] = None
 
 
 class Orchestrator:
@@ -105,6 +107,12 @@ class Orchestrator:
         # Local fallback components
         self._local_llm_client = None
         self._local_tts_client = None
+
+        # Background recording state
+        self._recording = False
+        self._audio_buffer = []
+        self._audio_stream = None
+        self._pyaudio_instance = None
 
     @property
     def state(self) -> PipelineState:
@@ -514,11 +522,127 @@ class Orchestrator:
             else:
                 raise
 
+    def start_recording_background(self) -> None:
+        """
+        Start background audio recording for Streamlit.
+        
+        Call this when the user clicks the microphone button.
+        Audio is buffered until stop_recording_background() is called.
+        
+        Raises:
+            OrchestratorError: If STT not initialized or recording fails
+        """
+        if not self._stt_client:
+            raise OrchestratorError("STT not initialized. Call initialize_stt() first.", component="stt")
+        
+        if self._recording:
+            return  # Already recording
+        
+        import pyaudio
+        import numpy as np
+        
+        self._audio_buffer = []
+        self._recording = True
+        
+        try:
+            self._pyaudio_instance = pyaudio.PyAudio()
+            
+            # Open audio stream
+            self._audio_stream = self._pyaudio_instance.open(
+                format=pyaudio.paFloat32,
+                channels=1,
+                rate=self._stt_client.sample_rate,
+                input=True,
+                frames_per_buffer=1024,
+                stream_callback=self._audio_callback
+            )
+            
+            self._audio_stream.start_stream()
+            logger.info("[Background recording started]")
+            
+        except Exception as e:
+            self._recording = False
+            if self._pyaudio_instance:
+                self._pyaudio_instance.terminate()
+                self._pyaudio_instance = None
+            raise OrchestratorError(f"Failed to start recording: {e}", component="stt")
+    
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        """Callback for audio stream to buffer audio data."""
+        import numpy as np
+        import pyaudio
+        
+        if self._recording:
+            audio_chunk = np.frombuffer(in_data, dtype=np.float32)
+            self._audio_buffer.append(audio_chunk)
+        
+        return (in_data, pyaudio.paContinue)
+    
+    def stop_recording_background(self) -> str:
+        """
+        Stop background recording and transcribe the captured audio.
+        
+        Returns:
+            Transcribed text from the recording
+            
+        Raises:
+            OrchestratorError: If transcription fails
+        """
+        if not self._recording:
+            return ""
+        
+        import numpy as np
+        
+        self._recording = False
+        
+        try:
+            # Stop and close the stream
+            if self._audio_stream:
+                self._audio_stream.stop_stream()
+                self._audio_stream.close()
+                self._audio_stream = None
+            
+            if self._pyaudio_instance:
+                self._pyaudio_instance.terminate()
+                self._pyaudio_instance = None
+            
+            # Process the buffered audio
+            if not self._audio_buffer:
+                logger.info("[No audio captured]")
+                return ""
+            
+            full_audio = np.concatenate(self._audio_buffer)
+            self._audio_buffer = []
+            
+            # Check if there's enough audio
+            duration = len(full_audio) / self._stt_client.sample_rate
+            if duration < self._stt_client.min_speech_duration:
+                logger.info(f"[Audio too short: {duration:.2f}s]")
+                return ""
+            
+            # Transcribe
+            logger.info(f"[Transcribing {duration:.2f}s of audio...]")
+            text = self._stt_client.transcribe_audio(full_audio, self._stt_client.sample_rate)
+            logger.info(f"[Transcribed: {text}]")
+            return text
+            
+        except Exception as e:
+            self._audio_buffer = []
+            raise OrchestratorError(f"Failed to process recording: {e}", component="stt")
+
     async def shutdown(self) -> None:
         """
         Shutdown the orchestrator and cleanup resources.
         """
         self._running = False
+        
+        # Stop any ongoing recording
+        if self._recording:
+            try:
+                self.stop_recording_background()
+            except Exception as e:
+                logger.warning(f"Error stopping recording during shutdown: {e}")
+        
         self._set_state(PipelineState.IDLE)
 
     async def process_text(self, text: str, speak: bool = True) -> PipelineResult:
@@ -554,13 +678,18 @@ class Orchestrator:
                 if self.on_response:
                     self.on_response(reply)
 
+                # Get prosody parameters for UI display
+                prosody = self._redis_client.get_prosody(style or "neutral")
+                pitch = prosody.get("pitch", "0%")
+                rate = prosody.get("rate", "1.0")
+
                 # Speak the response (prosody fetched from Redis in _speak)
                 if speak:
                     try:
                         await self._speak(reply, style)
-                    except TTSError as e:
+                    except (TTSError, PiperTTSError) as e:
                         self._redis_client.record_error(self.session_id, "tts")
-                        print(f"  [TTS Warning: {e}]")
+                        logger.warning(f"TTS Warning: {e}")
 
                 # Calculate latency
                 latency_ms = (time.perf_counter() - start_time) * 1000
@@ -572,7 +701,9 @@ class Orchestrator:
                     assistant_response=reply,
                     style=style,
                     is_repetition=is_repetition,
-                    latency_ms=latency_ms
+                    latency_ms=latency_ms,
+                    pitch=pitch,
+                    rate=rate
                 )
 
             except Exception as e:
@@ -623,13 +754,18 @@ class Orchestrator:
                 if self.on_response:
                     self.on_response(reply)
 
+                # Get prosody parameters for UI display
+                prosody = self._redis_client.get_prosody(style or "neutral")
+                pitch = prosody.get("pitch", "0%")
+                rate = prosody.get("rate", "1.0")
+
                 # Speak the response
                 if speak:
                     try:
                         await self._speak(reply, style)
-                    except TTSError as e:
+                    except (TTSError, PiperTTSError) as e:
                         self._redis_client.record_error(self.session_id, "tts")
-                        print(f"  [TTS Warning: {e}]")
+                        logger.warning(f"TTS Warning: {e}")
 
                 # Calculate latency
                 latency_ms = (time.perf_counter() - start_time) * 1000
@@ -641,7 +777,9 @@ class Orchestrator:
                     assistant_response=reply,
                     style=style,
                     is_repetition=is_repetition,
-                    latency_ms=latency_ms
+                    latency_ms=latency_ms,
+                    pitch=pitch,
+                    rate=rate
                 )
 
             except Exception as e:
@@ -744,7 +882,7 @@ class Orchestrator:
 
                 # Display result info
                 print(f"\nAssistant: {result.assistant_response}")
-                print(f"  [style: {result.style}, latency: {result.latency_ms:.0f}ms]")
+                print(f"  [style: {result.style}, pitch: {result.pitch}, rate: {result.rate}, latency: {result.latency_ms:.0f}ms]")
 
                 if result.is_repetition:
                     print("  [Detected: User is repeating]")
