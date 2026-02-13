@@ -10,3 +10,4 @@ python-dotenv
 redis
 sentence-transformers
 azure-cognitiveservices-speech
+streamlit

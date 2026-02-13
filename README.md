@@ -5,13 +5,12 @@ Context-aware voice assistant with emotional intelligence, powered by Distil-Whi
 ## Current Features
 
 - **Voice input mode** - Real-time microphone transcription with Whisper STT
-- **Real-time transcription** - Live microphone input with voice activity detection (Distil-Whisper)
+- **Hybrid Architecture** - Automatic fallback to local services (Ollama/Piper) when APIs fail
 - **Intelligent responses** - Groq API with Llama 3 for emotionally-aware replies
 - **Conversation memory** - Redis-based session storage and context persistence
-- **Repetition detection** - Cosine similarity to detect when users repeat themselves
+- **NLP & Context** - Sentiment analysis, preference tracking, and frustration detection
 - **Emotional speech** - Azure Neural TTS with SSML prosody control
-- **Async orchestrator** - Full pipeline from voice/text input to spoken response
-- **Streaming responses** - Token-by-token LLM streaming and chunked TTS for low latency
+- **Streaming Pipeline** - Token-by-token LLM streaming and chunked TTS for low latency
 - **GPU accelerated** - Optimized for NVIDIA GPUs (CUDA)
 
 ## Quick Start
@@ -23,8 +22,11 @@ Context-aware voice assistant with emotional intelligence, powered by Distil-Whi
 # Start Redis (required)
 docker run -d --name redis -p 6379:6379 redis
 
-# Run the full voice assistant (text mode)
+# Run the full voice assistant (interactive mode)
 python main.py
+
+# Run the Web UI (Streamlit)
+streamlit run app.py
 
 # Run with voice input (microphone)
 python main.py --voice
@@ -201,6 +203,43 @@ print(response.reply)          # "I recommend the NVIDIA RTX 4060..."
 print(response.style)          # "cheerful"
 print(response.emphasis_words) # ["NVIDIA", "RTX 4060"]
 ```
+
+## Local Fallback (Offline Mode)
+
+ConversaVoice provides a robust fallback system to ensure availability even without an internet connection or when cloud APIs are down.
+
+### Fallback Stack
+
+| Service | Cloud (Primary) | Local (Fallback) |
+|---------|-----------------|------------------|
+| LLM | Groq (Llama 3) | Ollama (Llama 3 / Mistral) |
+| TTS | Azure Neural TTS | Piper (ONNX) |
+
+### How it Works
+
+The `FallbackManager` tracks consecutive failures for cloud services. If the threshold (default: 2) is reached, it automatically switches to the local service. It also supports "Auto-Recovery," where it periodically tries to switch back to the cloud after a certain number of successful local calls.
+
+### Setup Local Services
+
+1. **Ollama (LLM):**
+   ```bash
+   # Install Ollama and pull model
+   ollama pull llama3
+   ```
+2. **Piper (TTS):**
+   ```bash
+   # Piper is included in requirements, but you need to download a voice model
+   # Default: en_US-lessac-medium.onnx
+   ```
+
+## NLP & Context Enhancements
+
+The system goes beyond simple chat by analyzing user state and persisting information in Redis.
+
+- **Sentiment Analysis:** Detects emotions (Happy, Frustrated, Confused, Angry) to adapt assistant behavior.
+- **Preference Tracking:** Automatically extracts and saves user preferences (e.g., "I use Python for AI") to provide better recommendations.
+- **Context Labels:** Tracks if a user is a `first_time` visitor, `continuing` a conversation, or showing signs of `frustration`.
+- **Frustration Policy:** When frustration is detected (via keywords/repetition), the LLM is instructed to stop asking questions and provide direct answers immediately.
 
 ## Full Pipeline (Orchestrator)
 
