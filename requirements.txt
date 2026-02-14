@@ -4,12 +4,10 @@ transformers
 accelerate
 soundfile
 pyaudio
-numpy
-groq
-python-dotenv
+numpy<2.0.0
+scipy<1.14.0thon-dotenv
 redis
 sentence-transformers
 azure-cognitiveservices-speech
 streamlit
 sounddevice
-scipy
