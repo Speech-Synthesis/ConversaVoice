@@ -636,6 +636,6 @@ if st.session_state.is_recording:
 # Footer
 st.markdown("""
     <div style="text-align: center; padding: 1.5rem 0; opacity: 0.5; font-size: 12px;">
-        <p style="margin: 0;">Built with ❤️ • 🎤 Click to speak • 💬 Type to chat</p>
+        <p style="margin: 0;">ConversaVoice Platform • 🎤 Click to speak • 💬 Type to chat</p>
     </div>
 """, unsafe_allow_html=True)
