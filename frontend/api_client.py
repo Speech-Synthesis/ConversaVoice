@@ -28,23 +28,31 @@ class APIClient:
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
         """
         Handle API response and raise exceptions for errors.
-        
+
         Args:
             response: Response from API
-            
+
         Returns:
             JSON response data
-            
+
         Raises:
             Exception: If API returns an error
         """
         try:
             response.raise_for_status()
+            if not response.text:
+                raise Exception("Empty response from server")
             return response.json()
         except requests.exceptions.HTTPError as e:
             logger.error(f"API error: {e}")
-            error_detail = response.json().get("detail", str(e)) if response.text else str(e)
+            try:
+                error_detail = response.json().get("detail", str(e)) if response.text else str(e)
+            except:
+                error_detail = response.text[:200] if response.text else str(e)
             raise Exception(f"API error: {error_detail}")
+        except requests.exceptions.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response: {response.text[:200]}")
+            raise Exception(f"Server returned invalid response: {response.text[:100] if response.text else 'empty'}")
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             raise

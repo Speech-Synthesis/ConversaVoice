@@ -19,6 +19,8 @@ services:
         value: red-d68scf4r85hc73d1fgkg
       - key: REDIS_PORT
         value: "6379"
+      - key: STT_BACKEND
+        value: groq
 
   # Service 2: The Streamlit Frontend
   - type: web
