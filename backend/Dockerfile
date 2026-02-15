@@ -2,9 +2,9 @@
 FROM python:3.10-slim
 
 # Install system dependencies required for pyaudio
-RUN apt-get update && apt-get install -y --no-install-recommends 
-    build-essential 
-    portaudio19-dev 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- START DEBUGGING ----
