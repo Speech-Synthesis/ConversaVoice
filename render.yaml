@@ -2,10 +2,10 @@ services:
   # Service 1: The FastAPI Backend
   - type: web
     name: conversavoice-backend
-    env: python
+    env: docker
     region: oregon
     plan: free # Or "starter" for more performance
-    buildCommand: "pip install -r backend/requirements.txt"
+    dockerfilePath: ./backend/Dockerfile
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
@@ -20,10 +20,10 @@ services:
   # Service 2: The Streamlit Frontend
   - type: web
     name: conversavoice-frontend
-    env: python
+    env: docker
     region: oregon
     plan: free
-    buildCommand: "pip install -r frontend/requirements.txt"
+    dockerfilePath: ./frontend/Dockerfile
     startCommand: "streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0"
     envVars:
       - key: PYTHON_VERSION
