@@ -6,9 +6,12 @@ Provides connection handling and basic operations for conversation memory.
 import os
 import logging
 from typing import Optional
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load env from project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 logger = logging.getLogger(__name__)
 

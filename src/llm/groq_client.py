@@ -9,12 +9,14 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Generator, Callable
+from pathlib import Path
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 @dataclass

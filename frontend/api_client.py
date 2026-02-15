@@ -3,10 +3,13 @@
 import os
 import logging
 from typing import Optional, Dict, Any
+from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root
+PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 logger = logging.getLogger(__name__)
 

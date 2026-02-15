@@ -6,10 +6,12 @@ import time
 import argparse
 import requests
 import uuid
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load env
-load_dotenv()
+# Load env from project root
+PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 BASE_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")
 
