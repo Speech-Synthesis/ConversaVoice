@@ -18,3 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application code into the container
 COPY frontend/ ./frontend
 COPY src/ ./src
+
+# Define the command to run the application
+CMD ["streamlit", "run", "frontend/app.py", "--server.port", "80", "--server.address", "0.0.0.0"]

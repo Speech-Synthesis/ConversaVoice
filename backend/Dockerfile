@@ -27,3 +27,6 @@ COPY src/ ./src
 # List all copied files to verify paths
 RUN echo "--- Verifying file structure ---" && ls -R
 # ---- END DEBUGGING ----
+
+# Define the command to run the application
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "80"]
