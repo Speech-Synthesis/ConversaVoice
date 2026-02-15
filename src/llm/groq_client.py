@@ -327,6 +327,7 @@ Only output the JSON object, no additional text."""
             raw_response = self.chat(user_message, context)
             return self._parse_response(raw_response)
         except Exception as e:
+            print(f"\n[DEBUG] Groq API Error: {e}")
             logger.error(f"Error getting emotional response: {e}")
             # Return a safe fallback response
             return EmotionalResponse(
