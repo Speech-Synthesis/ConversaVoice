@@ -1,13 +1,8 @@
 import sys
 import os
-import time
-import base64
 import uuid
 import tempfile
 import streamlit as st
-import sounddevice as sd
-import scipy.io.wavfile as wav
-import numpy as np
 
 # Add parent directory to path to import frontend modules
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -368,14 +363,8 @@ st.markdown("""
 # Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "is_recording" not in st.session_state:
-    st.session_state.is_recording = False
-if "recording_data" not in st.session_state:
-    st.session_state.recording_data = [] # List to store audio chunks
 if "processing" not in st.session_state:
     st.session_state.processing = False
-if "processing_voice" not in st.session_state:
-    st.session_state.processing_voice = False
 if "client_session_id" not in st.session_state:
     # Try to create a session on backend
     try:
@@ -398,55 +387,7 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# Audio Recording Logic using custom implementation
-# We can't use st.audio_input properly in older Streamlit versions or with exact custom styling
-# So we use a creative approach with session state buffering
-
-def start_recording():
-    st.session_state.is_recording = True
-    st.session_state.recording_data = [] # Clear previous recording
-    st.rerun()
-
-def stop_recording():
-    st.session_state.is_recording = False
-    st.session_state.processing_voice = True
-    st.rerun()
-
-# Audio capture thread logic would go here, but Streamlit execution model makes real-time 
-# audio streaming difficult without custom components.
-# Ideally we uses a component, but for now we will simulate "Recording" state validation
-# and use standard sounddevice if running locally (which app.py is).
-# Since app.py runs on server side (local for the user), we can use sounddevice directly.
-
-if st.session_state.is_recording:
-    # Use non-blocking recording reference
-    if "audio_stream" not in st.session_state:
-        try:
-            # 16kHz, mono
-            fs = 16000
-            st.session_state.audio_stream = sd.InputStream(
-                samplerate=fs, 
-                channels=1, 
-                dtype='int16'
-            )
-            st.session_state.audio_stream.start()
-            st.session_state.start_time = time.time()
-        except Exception as e:
-            st.error(f"Failed to access microphone: {e}")
-            st.session_state.is_recording = False
-    
-    # Read available frames
-    if "audio_stream" in st.session_state and st.session_state.audio_stream.active:
-        frames, overflow = st.session_state.audio_stream.read(st.session_state.audio_stream.read_available)
-        if len(frames) > 0:
-            st.session_state.recording_data.append(frames)
-
-elif not st.session_state.is_recording and "audio_stream" in st.session_state:
-    # Stop and close stream
-    if st.session_state.audio_stream.active:
-        st.session_state.audio_stream.stop()
-    st.session_state.audio_stream.close()
-    del st.session_state.audio_stream
+# Audio Recording - uses browser's microphone via Streamlit's audio_input
 
 # Chat Container
 if not st.session_state.messages:
@@ -494,29 +435,7 @@ input_placeholder = st.empty()
 
 if not st.session_state.processing:
     with input_placeholder.container():
-        # Recording/Processing Banner
-        if st.session_state.is_recording or st.session_state.processing_voice:
-            banner_text = "Recording..." if st.session_state.is_recording else "Processing your voice... ⏳"
-            status_text = "Speak now" if st.session_state.is_recording else "Almost there"
-            dot_style = "background: #ef4444;" if st.session_state.is_recording else "background: #6366f1;"
-            
-            st.markdown(f"""
-                <div class="recording-banner">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 16px;">
-                        <span class="rec-dot" style="{dot_style}"></span>
-                        <strong style="font-size: 16px;">{banner_text}</strong>
-                        <div class="voice-waves">
-                            <div class="wave-bar"></div><div class="wave-bar"></div>
-                            <div class="wave-bar"></div><div class="wave-bar"></div>
-                            <div class="wave-bar"></div><div class="wave-bar"></div>
-                            <div class="wave-bar"></div><div class="wave-bar"></div>
-                        </div>
-                        <span style="font-size: 13px; opacity: 0.8;">{status_text}</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-        col_input, col_voice = st.columns([8.8, 1.2], gap="small")
+        col_input, col_voice = st.columns([8.5, 1.5], gap="small")
 
         with col_input:
             st.text_input(
@@ -529,54 +448,44 @@ if not st.session_state.processing:
             )
 
         with col_voice:
-            if not st.session_state.processing_voice:
-                if st.session_state.is_recording:
-                    st.markdown("<div class='stop-btn recording-active'>", unsafe_allow_html=True)
-                    if st.button("⏹️", key="stop_rec", help="Stop recording"):
-                        stop_recording()
-                    st.markdown("</div>", unsafe_allow_html=True)
-                else:
-                    if st.button("🎤", key="mic_start", help="Start recording", disabled=not st.session_state.get("api_health", False)):
-                        start_recording()
+            # Browser-based audio recording using Streamlit's audio_input
+            audio_bytes = st.audio_input(
+                "🎤",
+                key="audio_recorder",
+                disabled=not st.session_state.get("api_health", False)
+            )
 
-# Process Voice Recording
-if st.session_state.processing_voice:
+# Process Voice Recording from browser
+if "audio_recorder" in st.session_state and st.session_state.audio_recorder is not None:
+    audio_bytes = st.session_state.audio_recorder
     try:
-        # 1. Compile audio data
-        if st.session_state.recording_data:
-            print("Compiling audio data...")
-            audio_data = np.concatenate(st.session_state.recording_data, axis=0)
-            
-            # Save to temp file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-                wav.write(temp_audio.name, 16000, audio_data)
-                temp_audio_path = temp_audio.name
-            
-            # 2. Transcribe via API
-            print("Sending to API for transcription...")
+        # Save audio bytes to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+            temp_audio.write(audio_bytes.getvalue())
+            temp_audio_path = temp_audio.name
+
+        # Transcribe via API
+        with st.spinner("Transcribing your voice... 🎤"):
             transcribed_text = st.session_state.api_client.transcribe_audio(temp_audio_path)
-            
-            # Context cleanup
-            try:
-                os.remove(temp_audio_path)
-            except:
-                pass
-                
-            if transcribed_text:
-                st.session_state.pending_text = transcribed_text
-            else:
-                st.warning("No speech detected.")
+
+        # Cleanup temp file
+        try:
+            os.remove(temp_audio_path)
+        except:
+            pass
+
+        if transcribed_text:
+            st.session_state.pending_text = transcribed_text
+            # Clear the audio input
+            st.session_state.audio_recorder = None
+            st.rerun()
         else:
-            st.warning("No audio recorded.")
-            
+            st.warning("No speech detected.")
+            st.session_state.audio_recorder = None
+
     except Exception as e:
         st.error(f"Error processing recording: {e}")
-    finally:
-        st.session_state.is_recording = False
-        st.session_state.processing_voice = False
-        st.session_state.recording_data = [] # Clear memory
-    
-    st.rerun()
+        st.session_state.audio_recorder = None
 
 # Process Pending Text (from input or voice)
 if "pending_text" in st.session_state and st.session_state.pending_text:
@@ -631,11 +540,6 @@ if "pending_text" in st.session_state and st.session_state.pending_text:
         st.error(f"Error communicating with backend: {e}")
         
     st.session_state.processing = False
-    st.rerun()
-
-# Auto refresh during recording for responsiveness
-if st.session_state.is_recording:
-    time.sleep(0.1)
     st.rerun()
 
 # Footer
