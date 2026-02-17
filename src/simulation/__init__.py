@@ -21,6 +21,12 @@ from .scenarios import (
     ScenarioError,
     get_scenario_engine,
 )
+from .persona import (
+    PersonaStateEngine,
+    ResponseAnalysis,
+    analyze_trainee_response,
+    EMOTION_PROSODY_MAP,
+)
 
 __all__ = [
     # Models
@@ -37,4 +43,9 @@ __all__ = [
     "ScenarioEngine",
     "ScenarioError",
     "get_scenario_engine",
+    # Persona State Engine
+    "PersonaStateEngine",
+    "ResponseAnalysis",
+    "analyze_trainee_response",
+    "EMOTION_PROSODY_MAP",
 ]
