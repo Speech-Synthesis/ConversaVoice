@@ -1,0 +1,33 @@
+{
+  "scenario_id": "product_return_calm",
+  "title": "Calm Customer - Product Return Request",
+  "description": "A customer wants to return a product that doesn't fit their needs. They are calm and reasonable but need guidance on the return process.",
+  "category": "returns",
+  "persona": {
+    "name": "David",
+    "emotion_start": "neutral",
+    "personality": "patient",
+    "goal": "Successfully return the product and get a refund",
+    "patience_level": 8,
+    "escalation_threshold": 5
+  },
+  "background_context": "The customer purchased a wireless headset online 10 days ago. The product works fine but doesn't fit comfortably for extended use. They have the original packaging and receipt. They're within the 30-day return window and just need to know how to proceed.",
+  "difficulty": "easy",
+  "success_criteria": [
+    "Greet the customer warmly",
+    "Understand the reason for return",
+    "Explain the return process clearly",
+    "Provide return shipping information",
+    "Set expectations for refund timeline",
+    "Thank the customer for their business"
+  ],
+  "common_mistakes": [
+    "Making the return process sound complicated",
+    "Not expressing understanding for the inconvenience",
+    "Forgetting to provide all necessary return details",
+    "Not confirming the customer understands the next steps",
+    "Missing opportunity to suggest alternative products"
+  ],
+  "tags": ["returns", "calm", "straightforward", "beginner-friendly"],
+  "estimated_duration_minutes": 4
+}
