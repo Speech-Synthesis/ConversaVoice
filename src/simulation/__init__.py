@@ -38,6 +38,11 @@ from .session_tracker import (
     SessionTrackerError,
     get_session_tracker,
 )
+from .analysis import (
+    AnalysisEngine,
+    AnalysisError,
+    get_analysis_engine,
+)
 
 __all__ = [
     # Models
@@ -68,4 +73,8 @@ __all__ = [
     "SessionTracker",
     "SessionTrackerError",
     "get_session_tracker",
+    # Analysis Engine
+    "AnalysisEngine",
+    "AnalysisError",
+    "get_analysis_engine",
 ]
