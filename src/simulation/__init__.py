@@ -27,6 +27,12 @@ from .persona import (
     analyze_trainee_response,
     EMOTION_PROSODY_MAP,
 )
+from .controller import (
+    SimulationController,
+    SimulationResponse,
+    SimulationError,
+    get_simulation_controller,
+)
 
 __all__ = [
     # Models
@@ -48,4 +54,9 @@ __all__ = [
     "ResponseAnalysis",
     "analyze_trainee_response",
     "EMOTION_PROSODY_MAP",
+    # Simulation Controller
+    "SimulationController",
+    "SimulationResponse",
+    "SimulationError",
+    "get_simulation_controller",
 ]
