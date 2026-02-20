@@ -16,6 +16,7 @@ env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from backend.api.routes import router
+from backend.api.simulation_routes import router as simulation_router
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router)
+app.include_router(simulation_router)
 
 
 @app.on_event("startup")
@@ -66,7 +68,9 @@ async def root():
         "message": "ConversaVoice API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/api/health"
+        "health": "/api/health",
+        "simulation": "/api/simulation/scenarios",
+        "modes": ["assistant", "simulation"]
     }
 
 
