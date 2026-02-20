@@ -33,6 +33,11 @@ from .controller import (
     SimulationError,
     get_simulation_controller,
 )
+from .session_tracker import (
+    SessionTracker,
+    SessionTrackerError,
+    get_session_tracker,
+)
 
 __all__ = [
     # Models
@@ -59,4 +64,8 @@ __all__ = [
     "SimulationResponse",
     "SimulationError",
     "get_simulation_controller",
+    # Session Tracker
+    "SessionTracker",
+    "SessionTrackerError",
+    "get_session_tracker",
 ]
