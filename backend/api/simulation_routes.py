@@ -76,6 +76,11 @@ class SimulationTurnResponse(BaseModel):
     turn_number: int
     detected_techniques: List[str]
     detected_issues: List[str]
+    # Conversation completion tracking
+    conversation_complete: bool = False
+    approaching_end: bool = False
+    ending_type: Optional[str] = None
+    goodbye_message: Optional[str] = None
 
 
 class EndSimulationRequest(BaseModel):
@@ -290,6 +295,11 @@ async def process_trainee_response(request: TraineeInputRequest):
         # Process the trainee's input
         response = await controller.process_trainee_input_async(request.message)
 
+        # Extract completion status
+        completion_status = response.completion_status
+        approaching_end = completion_status.approaching_end if completion_status else False
+        ending_type = completion_status.ending_type.value if completion_status and completion_status.ending_type else None
+
         return SimulationTurnResponse(
             customer_message=response.customer_message,
             emotion_state=response.emotion_state.value,
@@ -299,6 +309,10 @@ async def process_trainee_response(request: TraineeInputRequest):
             turn_number=response.turn_number,
             detected_techniques=response.trainee_analysis.detected_techniques,
             detected_issues=response.trainee_analysis.detected_issues,
+            conversation_complete=response.conversation_complete,
+            approaching_end=approaching_end,
+            ending_type=ending_type if ending_type != "none" else None,
+            goodbye_message=response.goodbye_message,
         )
 
     except HTTPException:

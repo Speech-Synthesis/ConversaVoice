@@ -296,6 +296,11 @@ if "voice_enabled" not in st.session_state:
     st.session_state.voice_enabled = True
 if "last_audio_id" not in st.session_state:
     st.session_state.last_audio_id = None
+# Natural conversation ending
+if "natural_ending" not in st.session_state:
+    st.session_state.natural_ending = False
+if "ending_type" not in st.session_state:
+    st.session_state.ending_type = None
 
 
 # ============================================================================
@@ -485,6 +490,38 @@ def render_active_simulation():
             unsafe_allow_html=True
         )
 
+    # Show completion banner if conversation ended naturally
+    if st.session_state.get("natural_ending"):
+        ending_type = st.session_state.get("ending_type", "natural_conclusion")
+        if ending_type == "satisfied_goodbye":
+            banner_color = "rgba(34, 197, 94, 0.2)"
+            banner_border = "#22c55e"
+            banner_icon = "✅"
+            banner_text = "Customer is satisfied! Click 'Mark Resolved & End' to complete."
+        elif ending_type == "reluctant_acceptance":
+            banner_color = "rgba(234, 179, 8, 0.2)"
+            banner_border = "#eab308"
+            banner_icon = "😐"
+            banner_text = "Customer reluctantly accepted. You may want to ensure they're satisfied."
+        elif ending_type == "frustrated_exit":
+            banner_color = "rgba(239, 68, 68, 0.2)"
+            banner_border = "#ef4444"
+            banner_icon = "😤"
+            banner_text = "Customer left frustrated. Click 'Mark Unresolved & End' to complete."
+        else:
+            banner_color = "rgba(99, 102, 241, 0.2)"
+            banner_border = "#6366f1"
+            banner_icon = "👋"
+            banner_text = "Conversation concluded. End the session to see your score."
+
+        st.markdown(f"""
+            <div style="background: {banner_color}; border: 2px solid {banner_border};
+                        border-radius: 12px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
+                <span style="font-size: 1.5rem;">{banner_icon}</span>
+                <span style="margin-left: 0.5rem;">{banner_text}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
     # Conversation display
     st.markdown("### Conversation")
 
@@ -580,16 +617,22 @@ def render_active_simulation():
     # Action buttons
     col1, col2, col3 = st.columns(3)
 
+    # Highlight appropriate button based on ending type
+    natural_ending = st.session_state.get("natural_ending", False)
+    ending_type = st.session_state.get("ending_type", "")
+
     with col1:
-        if st.button("🏳️ End (Resolved)", use_container_width=True):
+        resolved_label = "✅ Mark Resolved & End" if natural_ending else "🏳️ End (Resolved)"
+        if st.button(resolved_label, use_container_width=True, type="primary" if ending_type in ["satisfied_goodbye", "reluctant_acceptance"] else "secondary"):
             end_simulation(resolved=True)
 
     with col2:
-        if st.button("❌ End (Unresolved)", use_container_width=True):
+        unresolved_label = "❌ Mark Unresolved & End" if natural_ending else "❌ End (Unresolved)"
+        if st.button(unresolved_label, use_container_width=True, type="primary" if ending_type == "frustrated_exit" else "secondary"):
             end_simulation(resolved=False)
 
     with col3:
-        if st.button("🚪 Abandon", use_container_width=True):
+        if st.button("🚪 Exit Session", use_container_width=True):
             abandon_simulation()
 
     # Process input
@@ -640,6 +683,26 @@ def process_trainee_response(message: str):
             prev = result.get("previous_emotion", "unknown")
             curr = result["emotion_state"]
             st.toast(f"Customer emotion: {prev} → {curr}")
+
+        # Check for natural conversation ending
+        if result.get("conversation_complete"):
+            ending_type = result.get("ending_type", "natural_conclusion")
+            if ending_type == "satisfied_goodbye":
+                st.toast("Customer is satisfied and ending the call.", icon="✅")
+            elif ending_type == "reluctant_acceptance":
+                st.toast("Customer reluctantly accepts the resolution.", icon="😐")
+            elif ending_type == "frustrated_exit":
+                st.toast("Customer is frustrated and leaving.", icon="😤")
+            else:
+                st.toast("Conversation naturally concluding.", icon="👋")
+
+            # Store that conversation ended naturally
+            st.session_state.natural_ending = True
+            st.session_state.ending_type = ending_type
+
+        # Show approaching end notification
+        elif result.get("approaching_end"):
+            st.toast("Customer seems ready to wrap up...", icon="💭")
 
     st.rerun()
 
@@ -834,6 +897,8 @@ def reset_simulation():
     st.session_state.messages = []
     st.session_state.current_emotion = None
     st.session_state.last_audio_id = None
+    st.session_state.natural_ending = False
+    st.session_state.ending_type = None
     st.rerun()
 
 

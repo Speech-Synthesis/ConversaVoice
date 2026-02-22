@@ -43,6 +43,13 @@ from .analysis import (
     AnalysisError,
     get_analysis_engine,
 )
+from .conversation_flow import (
+    ConversationFlowManager,
+    CompletionStatus,
+    EndingType,
+    get_flow_manager,
+    remove_flow_manager,
+)
 
 __all__ = [
     # Models
@@ -77,4 +84,10 @@ __all__ = [
     "AnalysisEngine",
     "AnalysisError",
     "get_analysis_engine",
+    # Conversation Flow
+    "ConversationFlowManager",
+    "CompletionStatus",
+    "EndingType",
+    "get_flow_manager",
+    "remove_flow_manager",
 ]

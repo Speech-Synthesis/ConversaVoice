@@ -21,6 +21,13 @@ from .models import (
 )
 from .scenarios import ScenarioEngine, ScenarioError, get_scenario_engine
 from .persona import PersonaStateEngine, ResponseAnalysis, analyze_trainee_response
+from .conversation_flow import (
+    ConversationFlowManager,
+    CompletionStatus,
+    EndingType,
+    get_flow_manager,
+    remove_flow_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,10 @@ class SimulationResponse:
     prosody: Dict[str, str]
     turn_number: int
     raw_llm_response: Optional[str] = None
+    # Conversation completion tracking
+    conversation_complete: bool = False
+    completion_status: Optional[CompletionStatus] = None
+    goodbye_message: Optional[str] = None
 
 
 class SimulationController:
@@ -82,6 +93,7 @@ class SimulationController:
         self._session: Optional[SimulationSession] = None
         self._scenario: Optional[ScenarioConfig] = None
         self._persona_engine: Optional[PersonaStateEngine] = None
+        self._flow_manager: Optional[ConversationFlowManager] = None
         self._is_active = False
 
     @property
@@ -171,6 +183,12 @@ class SimulationController:
         self._persona_engine = PersonaStateEngine(
             persona_config=self._scenario.persona,
             on_transition=self._handle_emotion_transition,
+        )
+
+        # Initialize conversation flow manager
+        self._flow_manager = get_flow_manager(
+            session_id=session_id,
+            starting_emotion=self._scenario.persona.emotion_start,
         )
 
         self._is_active = True
@@ -301,6 +319,20 @@ class SimulationController:
         self._session.total_turns = len(self._session.turns)
         self._session.final_emotion = new_emotion
 
+        # Update conversation flow and check for natural ending
+        completion_status = None
+        conversation_complete = False
+        goodbye_message = None
+
+        if self._flow_manager:
+            completion_status = self._flow_manager.update(
+                current_emotion=new_emotion,
+                customer_message=customer_message,
+                trainee_message=trainee_message,
+            )
+            conversation_complete = completion_status.is_complete
+            goodbye_message = completion_status.suggested_goodbye
+
         # Build response
         sim_response = SimulationResponse(
             customer_message=customer_message,
@@ -311,6 +343,9 @@ class SimulationController:
             prosody=self._persona_engine.prosody,
             turn_number=turn_number + 1,
             raw_llm_response=response,
+            conversation_complete=conversation_complete,
+            completion_status=completion_status,
+            goodbye_message=goodbye_message,
         )
 
         if self.on_turn_complete:
@@ -370,11 +405,16 @@ class SimulationController:
         # Store completed session
         completed_session = self._session
 
+        # Clean up flow manager
+        if completed_session:
+            remove_flow_manager(completed_session.session_id)
+
         # Reset state
         self._is_active = False
         self._session = None
         self._scenario = None
         self._persona_engine = None
+        self._flow_manager = None
 
         return completed_session
 
