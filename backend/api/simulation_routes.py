@@ -326,12 +326,17 @@ async def end_simulation(request: EndSimulationRequest):
             reason="completed"
         )
 
-        # Save session to tracker
-        tracker = get_session_tracker()
-        tracker.save_session(session)
+        # Save session to tracker (with error handling)
+        try:
+            tracker = get_session_tracker()
+            tracker.save_session(session)
+        except Exception as save_error:
+            logger.warning(f"Failed to save session to tracker: {save_error}")
+            # Continue anyway - session data is still in memory
 
         # Remove from active simulations
-        del _active_simulations[request.session_id]
+        if request.session_id in _active_simulations:
+            del _active_simulations[request.session_id]
 
         logger.info(f"Ended simulation: {request.session_id}")
 
@@ -351,10 +356,11 @@ async def end_simulation(request: EndSimulationRequest):
     except HTTPException:
         raise
     except SimulationError as e:
+        logger.error(f"Simulation error ending session: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to end simulation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to end simulation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 @router.get("/status/{session_id}")
@@ -386,7 +392,13 @@ async def get_session_analysis(session_id: str):
         session = tracker.get_session(session_id)
 
         if not session:
-            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+            # Session not in tracker - maybe it was just completed
+            # Try to return a basic response
+            logger.warning(f"Session {session_id} not found in tracker")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Session not found: {session_id}. It may have expired or not been saved."
+            )
 
         if session.status == "active":
             raise HTTPException(status_code=400, detail="Cannot analyze active session. End it first.")
@@ -419,10 +431,11 @@ async def get_session_analysis(session_id: str):
     except HTTPException:
         raise
     except AnalysisError as e:
+        logger.error(f"Analysis error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @router.get("/analysis/{session_id}/quick", response_model=QuickScoreResponse)

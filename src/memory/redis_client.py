@@ -26,7 +26,24 @@ class SimpleRedis:
     
     def ping(self):
         return True
-    
+
+    def set(self, name: str, value: str, ex: int = None) -> bool:
+        """Set a string value."""
+        self._data[name] = value
+        return True
+
+    def get(self, name: str) -> Optional[str]:
+        """Get a string value."""
+        return self._data.get(name)
+
+    def lrem(self, name: str, count: int, value: str) -> int:
+        """Remove elements from a list."""
+        if name not in self._data or not isinstance(self._data[name], list):
+            return 0
+        original_len = len(self._data[name])
+        self._data[name] = [x for x in self._data[name] if x != value]
+        return original_len - len(self._data[name])
+
     def hset(self, name: str, key: str = None, value: str = None, mapping: Dict = None) -> int:
         if name not in self._data:
             self._data[name] = {}

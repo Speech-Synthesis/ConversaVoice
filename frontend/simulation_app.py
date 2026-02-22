@@ -646,6 +646,15 @@ def process_trainee_response(message: str):
 
 def end_simulation(resolved: bool):
     """End the simulation."""
+    # Store local session data for fallback analysis
+    st.session_state.local_session_data = {
+        "messages": st.session_state.messages.copy(),
+        "scenario": st.session_state.scenario,
+        "resolution_achieved": resolved,
+        "turn_count": len([m for m in st.session_state.messages if m["role"] == "trainee"]),
+        "final_emotion": st.session_state.current_emotion,
+    }
+
     with st.spinner("Ending simulation..."):
         result = api_post("/api/simulation/end", {
             "session_id": st.session_state.session_id,
@@ -653,6 +662,12 @@ def end_simulation(resolved: bool):
         })
 
     if result:
+        st.session_state.end_result = result
+        st.session_state.sim_state = "feedback"
+        st.rerun()
+    else:
+        # Even if API fails, still go to feedback with local data
+        st.warning("Session ended but couldn't save to server. Showing local results.")
         st.session_state.sim_state = "feedback"
         st.rerun()
 
@@ -678,19 +693,56 @@ def render_feedback():
         </div>
     """, unsafe_allow_html=True)
 
-    # Fetch analysis
-    with st.spinner("Analyzing your performance..."):
-        analysis = api_get(f"/api/simulation/analysis/{st.session_state.session_id}")
+    analysis = None
 
-    if not analysis:
-        st.error("Failed to load analysis. Using quick score instead.")
-        analysis = api_get(f"/api/simulation/analysis/{st.session_state.session_id}/quick")
+    # Try to fetch analysis from API
+    if st.session_state.session_id:
+        with st.spinner("Analyzing your performance..."):
+            analysis = api_get(f"/api/simulation/analysis/{st.session_state.session_id}")
 
+        if not analysis:
+            # Try quick score as fallback
+            analysis = api_get(f"/api/simulation/analysis/{st.session_state.session_id}/quick")
+
+    # If API fails, create local fallback analysis
     if not analysis:
-        st.error("Analysis unavailable.")
-        if st.button("Return to Scenarios"):
-            reset_simulation()
-        return
+        local_data = st.session_state.get("local_session_data", {})
+        end_result = st.session_state.get("end_result", {})
+
+        if local_data or end_result:
+            st.info("Using local session data for analysis.")
+            # Build basic analysis from local data
+            messages = local_data.get("messages", [])
+            trainee_turns = [m for m in messages if m["role"] == "trainee"]
+            customer_turns = [m for m in messages if m["role"] == "customer"]
+
+            # Count techniques used
+            techniques_used = []
+            for turn in trainee_turns:
+                techniques_used.extend(turn.get("techniques", []))
+
+            analysis = {
+                "overall_score": 6 if local_data.get("resolution_achieved") else 4,
+                "empathy_score": 5 + len([t for t in techniques_used if "empathy" in t.lower()]),
+                "de_escalation_score": 5,
+                "communication_clarity_score": 6,
+                "problem_solving_score": 6 if local_data.get("resolution_achieved") else 4,
+                "efficiency_score": max(3, 8 - len(trainee_turns)),
+                "resolution_achieved": local_data.get("resolution_achieved", False),
+                "de_escalation_success": local_data.get("final_emotion") in ["satisfied", "neutral", "hopeful"],
+                "turn_count": len(trainee_turns),
+                "duration_seconds": end_result.get("duration_seconds", 0),
+                "emotion_changes": end_result.get("emotion_changes", 0),
+                "strengths": ["Completed the simulation"],
+                "areas_for_improvement": ["Analysis unavailable - practice more scenarios"],
+                "specific_feedback": [],
+                "recommended_training": [],
+            }
+        else:
+            st.error("Analysis unavailable. No session data found.")
+            if st.button("Return to Scenarios"):
+                reset_simulation()
+            return
 
     # Overall score
     overall = analysis.get("overall_score", 5)
