@@ -173,6 +173,27 @@ def check_api_health() -> bool:
         return False
 
 
+def analyze_voice(audio_data: bytes) -> Optional[Dict]:
+    """Analyze voice audio for emotion and delivery scores."""
+    try:
+        files = {"audio": ("recording.wav", audio_data, "audio/wav")}
+        response = requests.post(
+            f"{API_BASE_URL}/api/simulation/analyze-voice",
+            files=files,
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.warning(f"Voice analysis failed: {e}")
+        return None
+
+
+# Import logging for voice analysis
+import logging
+logger = logging.getLogger(__name__)
+
+
 # ============================================================================
 # Custom Styling
 # ============================================================================
@@ -301,6 +322,11 @@ if "natural_ending" not in st.session_state:
     st.session_state.natural_ending = False
 if "ending_type" not in st.session_state:
     st.session_state.ending_type = None
+# Voice analysis tracking
+if "last_voice_analysis" not in st.session_state:
+    st.session_state.last_voice_analysis = None
+if "voice_analyses" not in st.session_state:
+    st.session_state.voice_analyses = []  # Store all voice analyses for final report
 
 
 # ============================================================================
@@ -546,9 +572,17 @@ def render_active_simulation():
                 for t in techniques
             ]) if techniques else ""
 
+            # Voice analysis badge if available
+            voice_html = ""
+            voice_data = msg.get("voice_analysis")
+            if voice_data:
+                voice_emotion = voice_data.get("emotion", "")
+                voice_score = voice_data.get("delivery_scores", {}).get("overall", 0)
+                voice_html = f' <span class="emotion-badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc;">🎤 {voice_emotion} ({voice_score}/10)</span>'
+
             st.markdown(f"""
                 <div class="chat-trainee">
-                    <strong>You (Trainee)</strong> {techniques_html}
+                    <strong>You (Trainee)</strong> {techniques_html}{voice_html}
                     <p style="margin-top: 0.5rem;">{msg["content"]}</p>
                 </div>
             """, unsafe_allow_html=True)
@@ -595,9 +629,20 @@ def render_active_simulation():
                     temp_audio.write(audio_data)
                     temp_audio_path = temp_audio.name
 
-                # Transcribe via API
-                with st.spinner("Transcribing your voice... 🎤"):
+                # Transcribe and analyze voice in parallel conceptually
+                with st.spinner("Processing your voice... 🎤"):
+                    # Transcribe
                     transcribed_text = st.session_state.api_client.transcribe_audio(temp_audio_path)
+
+                    # Analyze voice emotion and delivery
+                    voice_analysis = analyze_voice(audio_data)
+                    if voice_analysis and voice_analysis.get("analysis_success"):
+                        st.session_state.last_voice_analysis = voice_analysis
+                        # Show voice emotion badge
+                        emotion = voice_analysis.get("primary_emotion", "unknown")
+                        delivery = voice_analysis.get("delivery_scores", {})
+                        overall = delivery.get("overall", 5)
+                        st.toast(f"Voice: {emotion} (delivery: {overall}/10)", icon="🎤")
 
                 # Cleanup
                 try:
@@ -642,11 +687,25 @@ def render_active_simulation():
 
 def process_trainee_response(message: str):
     """Send trainee response and get customer reply."""
-    # Add trainee message
+    # Get voice analysis if available
+    voice_analysis = st.session_state.get("last_voice_analysis")
+    voice_data = None
+    if voice_analysis:
+        voice_data = {
+            "emotion": voice_analysis.get("primary_emotion", "unknown"),
+            "delivery_scores": voice_analysis.get("delivery_scores", {}),
+        }
+        # Store for final report
+        st.session_state.voice_analyses.append(voice_analysis)
+        # Clear for next turn
+        st.session_state.last_voice_analysis = None
+
+    # Add trainee message with voice data
     st.session_state.messages.append({
         "role": "trainee",
         "content": message,
-        "techniques": []
+        "techniques": [],
+        "voice_analysis": voice_data,
     })
 
     with st.spinner(f"{st.session_state.customer_name} is responding..."):
@@ -709,6 +768,14 @@ def process_trainee_response(message: str):
 
 def end_simulation(resolved: bool):
     """End the simulation."""
+    # Calculate average voice scores
+    voice_analyses = st.session_state.get("voice_analyses", [])
+    avg_voice_scores = {}
+    if voice_analyses:
+        for key in ["calmness", "confidence", "empathy", "pace", "clarity", "overall"]:
+            scores = [va.get("delivery_scores", {}).get(key, 5) for va in voice_analyses]
+            avg_voice_scores[key] = sum(scores) / len(scores) if scores else 5
+
     # Store local session data for fallback analysis
     st.session_state.local_session_data = {
         "messages": st.session_state.messages.copy(),
@@ -716,6 +783,8 @@ def end_simulation(resolved: bool):
         "resolution_achieved": resolved,
         "turn_count": len([m for m in st.session_state.messages if m["role"] == "trainee"]),
         "final_emotion": st.session_state.current_emotion,
+        "voice_analyses": voice_analyses,
+        "avg_voice_scores": avg_voice_scores,
     }
 
     with st.spinner("Ending simulation..."):
@@ -823,7 +892,7 @@ def render_feedback():
     """, unsafe_allow_html=True)
 
     # Skill scores
-    st.markdown("### Skill Breakdown")
+    st.markdown("### 📝 Content Analysis")
 
     col1, col2 = st.columns(2)
 
@@ -835,6 +904,37 @@ def render_feedback():
     with col2:
         render_score_bar(analysis.get("problem_solving_score", 5), "Problem Solving")
         render_score_bar(analysis.get("efficiency_score", 5), "Efficiency")
+
+    # Voice delivery scores (if available)
+    local_data = st.session_state.get("local_session_data", {})
+    voice_scores = local_data.get("avg_voice_scores", {})
+
+    if voice_scores:
+        st.markdown("### 🎤 Voice Delivery")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            render_score_bar(int(voice_scores.get("calmness", 5)), "Calmness")
+            render_score_bar(int(voice_scores.get("confidence", 5)), "Confidence")
+            render_score_bar(int(voice_scores.get("empathy", 5)), "Empathetic Tone")
+
+        with col2:
+            render_score_bar(int(voice_scores.get("pace", 5)), "Pace Control")
+            render_score_bar(int(voice_scores.get("clarity", 5)), "Clarity")
+
+        # Voice emotion summary
+        voice_analyses = local_data.get("voice_analyses", [])
+        if voice_analyses:
+            emotions = [va.get("primary_emotion", "unknown") for va in voice_analyses]
+            emotion_counts = {}
+            for e in emotions:
+                emotion_counts[e] = emotion_counts.get(e, 0) + 1
+
+            # Get dominant emotion
+            dominant = max(emotion_counts, key=emotion_counts.get)
+            st.markdown(f"**Primary Voice Emotion:** {dominant.capitalize()} "
+                       f"({emotion_counts[dominant]}/{len(emotions)} responses)")
 
     # Strengths
     st.markdown("### 💪 Strengths")
@@ -899,6 +999,9 @@ def reset_simulation():
     st.session_state.last_audio_id = None
     st.session_state.natural_ending = False
     st.session_state.ending_type = None
+    st.session_state.last_voice_analysis = None
+    st.session_state.voice_analyses = []
+    st.session_state.local_session_data = {}
     st.rerun()
 
 
