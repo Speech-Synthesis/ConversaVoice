@@ -50,6 +50,14 @@ from .conversation_flow import (
     get_flow_manager,
     remove_flow_manager,
 )
+from .voice_analyzer import (
+    VoiceAnalyzer,
+    VoiceAnalysis,
+    VoiceEmotion,
+    AcousticFeatures,
+    DeliveryScores,
+    get_voice_analyzer,
+)
 
 __all__ = [
     # Models
@@ -90,4 +98,11 @@ __all__ = [
     "EndingType",
     "get_flow_manager",
     "remove_flow_manager",
+    # Voice Analyzer
+    "VoiceAnalyzer",
+    "VoiceAnalysis",
+    "VoiceEmotion",
+    "AcousticFeatures",
+    "DeliveryScores",
+    "get_voice_analyzer",
 ]

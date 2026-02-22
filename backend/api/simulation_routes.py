@@ -1,8 +1,8 @@
 """FastAPI routes for Conversation Simulation system."""
 
 import logging
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, List, Dict
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
 
 from src.simulation import (
@@ -19,6 +19,7 @@ from src.simulation import (
     get_analysis_engine,
     DifficultyLevel,
     EmotionState,
+    get_voice_analyzer,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,17 @@ class QuickScoreResponse(BaseModel):
     emotion_improvement: int
     techniques_used: List[str]
     resolution_achieved: bool
+
+
+class VoiceAnalysisResponse(BaseModel):
+    """Voice analysis result."""
+    analysis_success: bool
+    primary_emotion: str
+    secondary_emotion: Optional[str] = None
+    emotion_confidence: float
+    delivery_scores: Dict[str, int]
+    acoustic_features: Dict[str, float]
+    error_message: Optional[str] = None
 
 
 # ============================================================================
@@ -504,6 +516,59 @@ async def get_analysis_report(session_id: str, format: str = Query("text", regex
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze-voice", response_model=VoiceAnalysisResponse)
+async def analyze_voice(audio: UploadFile = File(...)):
+    """
+    Analyze trainee voice for emotion and delivery quality.
+
+    Accepts audio file (WAV format preferred) and returns:
+    - Detected voice emotion (calm, stressed, confident, etc.)
+    - Delivery scores (calmness, confidence, empathy, pace, clarity)
+    - Acoustic features (pitch, energy, speaking rate, etc.)
+    """
+    try:
+        # Read audio data
+        audio_data = await audio.read()
+
+        if len(audio_data) == 0:
+            raise HTTPException(status_code=400, detail="Empty audio file")
+
+        # Analyze voice
+        analyzer = get_voice_analyzer()
+        result = analyzer.analyze(audio_data)
+
+        # Build response
+        return VoiceAnalysisResponse(
+            analysis_success=result.analysis_success,
+            primary_emotion=result.primary_emotion.value,
+            secondary_emotion=result.secondary_emotion.value if result.secondary_emotion else None,
+            emotion_confidence=result.emotion_confidence,
+            delivery_scores={
+                "calmness": result.delivery_scores.calmness,
+                "confidence": result.delivery_scores.confidence,
+                "empathy": result.delivery_scores.empathy,
+                "pace": result.delivery_scores.pace,
+                "clarity": result.delivery_scores.clarity,
+                "overall": result.delivery_scores.overall,
+            },
+            acoustic_features={
+                "pitch_mean": result.features.pitch_mean,
+                "pitch_std": result.features.pitch_std,
+                "energy_mean": result.features.energy_mean,
+                "speaking_rate": result.features.speaking_rate,
+                "pause_ratio": result.features.pause_ratio,
+                "duration_seconds": result.features.duration_seconds,
+            },
+            error_message=result.error_message,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voice analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Voice analysis failed: {str(e)}")
 
 
 # ============================================================================
