@@ -30,7 +30,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000").rstrip("/")
 
 # Initialize API Client for voice features
 if "api_client" not in st.session_state:
