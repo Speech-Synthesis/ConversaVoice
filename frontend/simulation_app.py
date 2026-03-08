@@ -300,33 +300,32 @@ st.markdown("""
 # Session State Initialization
 # ============================================================================
 
-if "sim_state" not in st.session_state:
-    st.session_state.sim_state = "select"  # select, active, feedback
-if "session_id" not in st.session_state:
-    st.session_state.session_id = None
-if "scenario" not in st.session_state:
-    st.session_state.scenario = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "current_emotion" not in st.session_state:
-    st.session_state.current_emotion = None
-if "customer_name" not in st.session_state:
-    st.session_state.customer_name = "Customer"
-# Voice mode settings
-if "voice_enabled" not in st.session_state:
-    st.session_state.voice_enabled = True
-if "last_audio_id" not in st.session_state:
-    st.session_state.last_audio_id = None
-# Natural conversation ending
-if "natural_ending" not in st.session_state:
-    st.session_state.natural_ending = False
-if "ending_type" not in st.session_state:
-    st.session_state.ending_type = None
-# Voice analysis tracking
-if "last_voice_analysis" not in st.session_state:
-    st.session_state.last_voice_analysis = None
-if "voice_analyses" not in st.session_state:
-    st.session_state.voice_analyses = []  # Store all voice analyses for final report
+def ensure_session_state() -> None:
+    """Initialize required Streamlit session_state keys."""
+    if "sim_state" not in st.session_state:
+        st.session_state.sim_state = "select"  # select, active, feedback
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = None
+    if "scenario" not in st.session_state:
+        st.session_state.scenario = None
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "current_emotion" not in st.session_state:
+        st.session_state.current_emotion = None
+    if "customer_name" not in st.session_state:
+        st.session_state.customer_name = "Customer"
+    if "voice_enabled" not in st.session_state:
+        st.session_state.voice_enabled = True
+    if "last_audio_id" not in st.session_state:
+        st.session_state.last_audio_id = None
+    if "natural_ending" not in st.session_state:
+        st.session_state.natural_ending = False
+    if "ending_type" not in st.session_state:
+        st.session_state.ending_type = None
+    if "last_voice_analysis" not in st.session_state:
+        st.session_state.last_voice_analysis = None
+    if "voice_analyses" not in st.session_state:
+        st.session_state.voice_analyses = []  # Store all voice analyses for final report
 
 
 # ============================================================================
@@ -1011,6 +1010,7 @@ def reset_simulation():
 
 def main():
     """Main app entry point."""
+    ensure_session_state()
     if st.session_state.sim_state == "select":
         render_scenario_selection()
     elif st.session_state.sim_state == "active":
