@@ -140,7 +140,7 @@ uvicorn main:app --reload --port 8000
 **3. Start Frontend (Terminal 2):**
 ```bash
 cd frontend
-streamlit run app.py
+streamlit run simulation_app.py
 ```
 
 **4. Open Browser:**

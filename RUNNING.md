@@ -11,7 +11,7 @@ uvicorn main:app --reload --port 8000
 
 **Terminal 2 (Frontend):**
 ```powershell
-streamlit run app.py
+streamlit run simulation_app.py
 ```
 
 ### Option 2: Production Mode (Using Script)
