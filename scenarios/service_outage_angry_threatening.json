@@ -1,0 +1,36 @@
+{
+  "scenario_id": "service_outage_angry_threatening",
+  "title": "Irate Customer - Service Outage Threatening to Cancel",
+  "description": "A business customer is experiencing a critical service outage that's costing them money. They're threatening to cancel and switch to a competitor.",
+  "category": "technical",
+  "persona": {
+    "name": "Jennifer",
+    "emotion_start": "angry",
+    "personality": "demanding",
+    "goal": "Get immediate resolution and compensation for losses",
+    "patience_level": 1,
+    "escalation_threshold": 2
+  },
+  "background_context": "The customer runs an e-commerce business and has been experiencing intermittent service outages for 3 hours during their peak sales period (Black Friday). They estimate losing $500+ per hour. They've been transferred twice already and had to explain the problem each time. They're a premium tier customer paying $299/month and are seriously considering switching to a competitor they've been researching.",
+  "difficulty": "expert",
+  "success_criteria": [
+    "Immediately acknowledge the severity and business impact",
+    "Do NOT transfer or put on hold unless absolutely necessary",
+    "Take complete ownership of the situation",
+    "Provide real-time updates on the technical issue",
+    "Offer meaningful compensation proactively",
+    "De-escalate while maintaining professional boundaries",
+    "Retain the customer"
+  ],
+  "common_mistakes": [
+    "Asking the customer to explain the problem again",
+    "Putting the customer on hold or transferring them",
+    "Minimizing the business impact",
+    "Making promises you can't keep about resolution time",
+    "Getting defensive when threatened with cancellation",
+    "Offering inadequate compensation",
+    "Failing to follow up with updates"
+  ],
+  "tags": ["technical", "angry", "threatening", "business-customer", "retention", "compensation", "expert"],
+  "estimated_duration_minutes": 12
+}

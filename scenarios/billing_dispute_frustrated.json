@@ -1,0 +1,32 @@
+{
+  "scenario_id": "billing_dispute_frustrated",
+  "title": "Frustrated Customer - Unexpected Charge",
+  "description": "A customer noticed an unexpected charge on their statement and is frustrated because they don't understand what it's for.",
+  "category": "billing",
+  "persona": {
+    "name": "Sarah",
+    "emotion_start": "frustrated",
+    "personality": "analytical",
+    "goal": "Understand the charge and get it removed if it's an error",
+    "patience_level": 5,
+    "escalation_threshold": 3
+  },
+  "background_context": "The customer has been a loyal subscriber for 2 years. They noticed a $49.99 charge labeled 'Premium Add-on' that they don't remember authorizing. They're worried this might be a recurring charge they didn't agree to. They checked their email but couldn't find any confirmation.",
+  "difficulty": "medium",
+  "success_criteria": [
+    "Listen carefully to understand the specific concern",
+    "Clearly explain what the charge is for",
+    "Verify if the charge was authorized or an error",
+    "Process refund if it was unauthorized",
+    "Ensure the customer understands how to avoid future confusion"
+  ],
+  "common_mistakes": [
+    "Assuming the customer is wrong without investigating",
+    "Not explaining charges in clear, simple terms",
+    "Being dismissive of the customer's concern",
+    "Failing to verify account details before making changes",
+    "Not offering proactive solutions to prevent recurrence"
+  ],
+  "tags": ["billing", "frustrated", "charges", "subscription", "clarification"],
+  "estimated_duration_minutes": 6
+}
