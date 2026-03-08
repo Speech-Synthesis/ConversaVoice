@@ -29,6 +29,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Initialize API Client immediately for early access
+if "api_client" not in st.session_state:
+    st.session_state.api_client = APIClient()
+
 # API Configuration
 API_BASE_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000").rstrip("/")
 
@@ -109,6 +113,10 @@ def autoplay_audio(audio_url: str):
 def synthesize_customer_voice(text: str, prosody: dict) -> Optional[str]:
     """Synthesize customer speech with emotional prosody."""
     try:
+        # Ensure api_client is initialized
+        if "api_client" not in st.session_state:
+            st.session_state.api_client = APIClient()
+        
         # Map prosody dict to TTS parameters
         style = prosody.get("style", "angry")  # Customer emotion style
         pitch = prosody.get("pitch", "0%")
@@ -630,6 +638,10 @@ def render_active_simulation():
 
                 # Transcribe and analyze voice in parallel conceptually
                 with st.spinner("Processing your voice... 🎤"):
+                    # Ensure api_client is initialized
+                    if "api_client" not in st.session_state:
+                        st.session_state.api_client = APIClient()
+                    
                     # Transcribe
                     transcribed_text = st.session_state.api_client.transcribe_audio(temp_audio_path)
 
