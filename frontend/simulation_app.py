@@ -32,10 +32,6 @@ st.set_page_config(
 # API Configuration
 API_BASE_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000").rstrip("/")
 
-# Initialize API Client for voice features
-if "api_client" not in st.session_state:
-    st.session_state.api_client = APIClient()
-
 
 # ============================================================================
 # Audio Playback Component
@@ -302,6 +298,10 @@ st.markdown("""
 
 def ensure_session_state() -> None:
     """Initialize required Streamlit session_state keys."""
+    # Initialize API Client first for voice features
+    if "api_client" not in st.session_state:
+        st.session_state.api_client = APIClient()
+    
     if "sim_state" not in st.session_state:
         st.session_state.sim_state = "select"  # select, active, feedback
     if "session_id" not in st.session_state:
