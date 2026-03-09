@@ -13,12 +13,14 @@
     "escalation_threshold": 5
   },
   "background_context": "The customer purchased a wireless headset online 10 days ago. The product works fine but doesn't fit comfortably for extended use. They have the original packaging and receipt. They're within the 30-day return window and just need to know how to proceed.",
+  "opening_message": "Hi, I bought a wireless headset from your website about 10 days ago. It works fine but it's just not comfortable for me during long calls. I still have all the original packaging and my receipt. I'd like to return it if possible. Can you walk me through how to do that?",
+  "target_emotion": "satisfied",
   "difficulty": "easy",
   "success_criteria": [
     "Greet the customer warmly",
-    "Understand the reason for return",
-    "Explain the return process clearly",
-    "Provide return shipping information",
+    "Confirm eligibility for return",
+    "Explain the return process clearly step by step",
+    "Provide return shipping information or label",
     "Set expectations for refund timeline",
     "Thank the customer for their business"
   ],
@@ -27,13 +29,8 @@
     "Not expressing understanding for the inconvenience",
     "Forgetting to provide all necessary return details",
     "Not confirming the customer understands the next steps",
-    "Missing opportunity to suggest alternative products"
+    "Being pushy about exchanges instead of processing the return"
   ],
-  "tags": [
-    "returns",
-    "calm",
-    "straightforward",
-    "beginner-friendly"
-  ],
+  "tags": ["returns", "calm", "straightforward", "beginner-friendly"],
   "estimated_duration_minutes": 4
 }
