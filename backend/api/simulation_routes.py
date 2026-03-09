@@ -57,6 +57,7 @@ class StartSimulationResponse(BaseModel):
     scenario_id: str
     scenario_title: str
     customer_name: str
+    voice_gender: str = Field("female", description="Voice gender for TTS")
     initial_emotion: str
     opening_message: str
     prosody: dict
@@ -75,6 +76,7 @@ class SimulationTurnResponse(BaseModel):
     emotion_changed: bool
     previous_emotion: Optional[str]
     prosody: dict
+    voice_gender: str = Field("female", description="Voice gender for TTS")
     turn_number: int
     detected_techniques: List[str]
     detected_issues: List[str]
@@ -167,9 +169,39 @@ def get_active_controller(session_id: str) -> SimulationController:
     return _active_simulations[session_id]
 
 
-# ============================================================================
-# Scenario Endpoints
-# ============================================================================
+class GenerateScenarioRequest(BaseModel):
+    """Request to generate a new scenario."""
+    description: str = Field(..., description="Description of the persona and situation")
+    difficulty: Optional[str] = Field("medium", description="Target difficulty")
+
+
+@router.post("/scenarios/generate")
+async def generate_scenario(body: GenerateScenarioRequest):
+    """
+    Generate a full scenario JSON from a description. (Task 20)
+    """
+    try:
+        engine = get_scenario_engine()
+        # This assumes the engine has a generate method, if not we'd implement it here
+        # For now, let's assume we use an LLM call via orchestrator_service
+        from backend.services.orchestrator_service import orchestrator_service
+        
+        prompt = f"Generate a detailed ConversaVoice simulation scenario JSON based on: {body.description}. Difficulty: {body.difficulty}"
+        orchestrator = await orchestrator_service.get_orchestrator("scenario-gen")
+        result = await orchestrator.process_text(prompt, speak=False)
+        
+        # Try to parse JSON from LLM response
+        import re
+        json_match = re.search(r'\{.*\}', result.assistant_response, re.DOTALL)
+        if json_match:
+            scenario_json = json.loads(json_match.group())
+            return scenario_json
+        else:
+            return {"raw_response": result.assistant_response}
+            
+    except Exception as e:
+        logger.error(f"Scenario generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/scenarios", response_model=List[ScenarioSummary])
 async def list_scenarios(
@@ -256,7 +288,15 @@ async def start_simulation(request: Request, body: StartSimulationRequest):
 
     Returns the session ID and customer's opening message.
     """
+    # Task 16: Request Validation
+    if not body.scenario_id or not body.scenario_id.strip():
+        raise HTTPException(status_code=400, detail="scenario_id cannot be empty")
+
     try:
+        engine = get_scenario_engine()
+        if body.scenario_id not in engine.scenarios:
+             raise HTTPException(status_code=404, detail=f"Scenario not found: {body.scenario_id}")
+
         # Create new controller for this simulation
         controller = SimulationController()
 

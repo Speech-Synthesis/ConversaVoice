@@ -278,6 +278,12 @@ class ScenarioEngine:
         logger.info(f"Saved scenario to: {filepath}")
 
     @property
+    def scenarios(self) -> Dict[str, ScenarioConfig]:
+        """Get all loaded scenarios."""
+        self.load_scenarios()
+        return self._scenarios
+
+    @property
     def scenario_count(self) -> int:
         """Get number of loaded scenarios."""
         self.load_scenarios()
