@@ -188,16 +188,22 @@ class OrchestratorService:
                         tts_client.ssml_builder.voice = tts_client.ssml_builder.DEFAULT_MALE_VOICE if voice_gender == "male" else tts_client.ssml_builder.DEFAULT_FEMALE_VOICE
                 
                 def _speak_to_file(client):
-                    if hasattr(client, "synthesize_to_bytes_with_params"):
+                    if hasattr(client, "synthesize_to_file_with_params"):
+                        client.synthesize_to_file_with_params(text=text, filepath=audio_path, style=style, pitch=pitch, rate=rate)
+                    elif hasattr(client, "synthesize_to_bytes_with_params"):
                         audio_bytes = client.synthesize_to_bytes_with_params(text=text, style=style, pitch=pitch, rate=rate)
+                        with open(audio_path, 'wb') as f:
+                            f.write(audio_bytes)
+                    elif hasattr(client, "synthesize_to_file"):
+                        rate_float = float(rate) if rate else None
+                        client.synthesize_to_file(text=text, filepath=audio_path, rate=rate_float)
                     elif hasattr(client, "synthesize_to_bytes"):
                         rate_float = float(rate) if rate else None
                         audio_bytes = client.synthesize_to_bytes(text=text, rate=rate_float)
+                        with open(audio_path, 'wb') as f:
+                            f.write(audio_bytes)
                     else:
-                        raise Exception("TTS client does not support synthesize_to_bytes methods.")
-
-                    with open(audio_path, 'wb') as f:
-                        f.write(audio_bytes)
+                        raise Exception("TTS client does not support synthesize_to_file methods.")
 
                 await loop.run_in_executor(None, _speak_to_file, tts_client)
                 fb.report_success(ServiceType.TTS)
@@ -209,8 +215,28 @@ class OrchestratorService:
                 last_error = e
 
         if not success:
-            logger.error(f"All TTS synthesis attempts failed. Last error: {last_error}")
-            raise Exception(f"Failed to synthesize speech: {str(last_error)}")
+            logger.warning(f"All primary TTS engines failed. Last error: {last_error}. Invoking unbreakable Google TTS Fallback...")
+            try:
+                import urllib.parse
+                import requests
+                # Safe limit for Google Translate TTS GET requests
+                safe_text = text[:200]
+                encoded_text = urllib.parse.quote(safe_text)
+                url = f"http://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={encoded_text}&tl=en"
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    with open(audio_path, 'wb') as f:
+                        f.write(resp.content)
+                    success = True
+                    logger.info(f"Successfully generated ultimate fallback audio using Google TTS.")
+                else:
+                    logger.error(f"Google TTS Fallback failed with status {resp.status_code}")
+            except Exception as fe:
+                logger.error(f"Google TTS Fallback threw an exception: {fe}")
+
+        if not success:
+            logger.error(f"Total TTS destruction. Last error: {last_error}")
+            raise Exception(f"Failed to synthesize speech across all services: {str(last_error)}")
         
         # Store in cache
         self._audio_cache[cache_key] = audio_path
