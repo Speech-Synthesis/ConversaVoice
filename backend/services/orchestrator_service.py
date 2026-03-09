@@ -155,45 +155,62 @@ class OrchestratorService:
         filename = f"{uuid.uuid4()}.wav"
         audio_path = os.path.join(GENERATED_AUDIO_DIR, filename)
         
-        # Get TTS client
-        tts_client = orchestrator._tts_client
-        
-        # Update TTS Client gender if provided
-        if voice_gender:
-            tts_client.voice_gender = voice_gender
-            # This logic should probably be in the TTS client itself, but keeping it here for now
-            if hasattr(tts_client, 'ssml_builder'):
-                tts_client.ssml_builder.voice = tts_client.ssml_builder.DEFAULT_MALE_VOICE if voice_gender == "male" else tts_client.ssml_builder.DEFAULT_FEMALE_VOICE
+        if not orchestrator.response_processor:
+            raise Exception("Orchestrator not fully initialized. Missing ResponseProcessor.")
             
-        # Build SSML with parameters
-        if hasattr(tts_client, 'ssml_builder'):
-            ssml = tts_client.ssml_builder.build_from_llm_response(
-                text=text,
-                style=style,
-                pitch=pitch,
-                rate=rate
-            )
+        rp = orchestrator.response_processor
+        fb = rp.fallback_manager
+        
+        # Try active client first, then fallback
+        from src.fallback import ServiceType
+        
+        clients_to_try = []
+        if fb.should_use_local(ServiceType.TTS):
+            clients_to_try = [rp._local_tts_client, rp._tts_client]
         else:
-            # Fallback if no ssml_builder
-            ssml = text
+            clients_to_try = [rp._tts_client, rp._local_tts_client]
+            
+        clients_to_try = [c for c in clients_to_try if c is not None]
         
-        # Synthesize to file (blocking call wrapped in thread)
-        import azure.cognitiveservices.speech as speechsdk
-        
-        def _speak():
-            audio_config = speechsdk.audio.AudioOutputConfig(filename=audio_path)
-            synthesizer = speechsdk.SpeechSynthesizer(
-                speech_config=tts_client._speech_config,
-                audio_config=audio_config
-            )
-            return synthesizer.speak_ssml_async(ssml).get()
+        if not clients_to_try:
+            raise Exception("No TTS clients available for synthesis.")
 
         loop = asyncio.get_running_loop()
-        synthesis_result = await loop.run_in_executor(None, _speak)
+        success = False
+        last_error = None
         
-        if synthesis_result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
-            logger.error(f"TTS synthesis failed: {synthesis_result.reason}")
-            raise Exception(f"Failed to synthesize speech: {synthesis_result.reason}")
+        for tts_client in clients_to_try:
+            try:
+                # Update TTS Client gender if supported
+                if voice_gender and hasattr(tts_client, "voice_gender"):
+                    tts_client.voice_gender = voice_gender
+                    if hasattr(tts_client, 'ssml_builder'):
+                        tts_client.ssml_builder.voice = tts_client.ssml_builder.DEFAULT_MALE_VOICE if voice_gender == "male" else tts_client.ssml_builder.DEFAULT_FEMALE_VOICE
+                
+                def _speak_to_file(client):
+                    if hasattr(client, "synthesize_to_bytes_with_params"):
+                        audio_bytes = client.synthesize_to_bytes_with_params(text=text, style=style, pitch=pitch, rate=rate)
+                    elif hasattr(client, "synthesize_to_bytes"):
+                        rate_float = float(rate) if rate else None
+                        audio_bytes = client.synthesize_to_bytes(text=text, rate=rate_float)
+                    else:
+                        raise Exception("TTS client does not support synthesize_to_bytes methods.")
+
+                    with open(audio_path, 'wb') as f:
+                        f.write(audio_bytes)
+
+                await loop.run_in_executor(None, _speak_to_file, tts_client)
+                fb.report_success(ServiceType.TTS)
+                success = True
+                break
+            except Exception as e:
+                logger.warning(f"TTS client {tts_client.__class__.__name__} failed: {e}")
+                fb.report_failure(ServiceType.TTS, str(e))
+                last_error = e
+
+        if not success:
+            logger.error(f"All TTS synthesis attempts failed. Last error: {last_error}")
+            raise Exception(f"Failed to synthesize speech: {str(last_error)}")
         
         # Store in cache
         self._audio_cache[cache_key] = audio_path
