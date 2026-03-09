@@ -36,6 +36,10 @@ class VoiceEmotion(Enum):
     EMPATHETIC = "empathetic"
     RUSHED = "rushed"
     MONOTONE = "monotone"
+    EXCITED = "excited"
+    HAPPY = "happy"
+    NERVOUS = "nervous"
+    NEUTRAL = "neutral"
     UNKNOWN = "unknown"
 
 
@@ -76,6 +80,11 @@ class DeliveryScores:
     pace: int = 5              # Speaking rate quality
     clarity: int = 5           # Articulation quality
     overall: int = 5           # Weighted average
+    
+    # Advanced metrics
+    tone_score: float = 5.0
+    speaking_style_score: float = 5.0
+    final_communication_score: float = 5.0
 
 
 @dataclass
@@ -127,6 +136,28 @@ EMOTION_PROFILES = {
     VoiceEmotion.MONOTONE: {
         "pitch_std": (0, 10),           # No variation
         "energy_std": (0, 0.01),        # Flat energy
+    },
+    VoiceEmotion.EXCITED: {
+        "pitch_std": (35, 70),          # High variance and dynamic
+        "energy_mean": (0.05, 0.15),    # High energy
+        "speaking_rate": (140, 190),    # Fast pace
+        "pitch_contour": "rising",      # Excitement
+    },
+    VoiceEmotion.HAPPY: {
+        "pitch_std": (25, 45),          # Positive variation
+        "energy_mean": (0.03, 0.09),    # Moderate-high energy
+        "speaking_rate": (120, 160),    # Upbeat pace
+    },
+    VoiceEmotion.NERVOUS: {
+        "pitch_std": (40, 90),          # Jittery pitch
+        "pause_ratio": (0.15, 0.4),     # Lots of awkward pauses
+        "rhythm_regularity": (0.0, 0.4) # Uneven rhythm
+    },
+    VoiceEmotion.NEUTRAL: {
+        "pitch_std": (10, 25),          # Average variation
+        "energy_std": (0.01, 0.03),     # Steady energy
+        "speaking_rate": (110, 140),    # Normal pace
+        "pause_ratio": (0.05, 0.2),     # Normal pauses
     },
 }
 
@@ -183,8 +214,8 @@ class VoiceAnalyzer:
             # Classify emotion
             primary_emotion, secondary_emotion, confidence = self._classify_emotion(features)
 
-            # Score delivery
-            delivery_scores = self._score_delivery(features)
+            # Score delivery (pass confidence for final grade computing)
+            delivery_scores = self._score_delivery(features, confidence)
 
             return VoiceAnalysis(
                 features=features,
@@ -485,7 +516,7 @@ class VoiceAnalyzer:
             primary[1]
         )
 
-    def _score_delivery(self, features: AcousticFeatures) -> DeliveryScores:
+    def _score_delivery(self, features: AcousticFeatures, emotion_confidence: float = 0.5) -> DeliveryScores:
         """Score voice delivery quality."""
         scores = DeliveryScores()
 
@@ -518,13 +549,44 @@ class VoiceAnalyzer:
             clarity_score = 6  # Default if not available
         scores.clarity = int(clarity_score)
 
-        # Overall: Weighted average
+        # Overall (legacy integer base): Weighted average
         scores.overall = int(
             scores.calmness * 0.2 +
             scores.confidence * 0.25 +
             scores.empathy * 0.25 +
             scores.pace * 0.15 +
             scores.clarity * 0.15
+        )
+
+        # NEW 1. TONE SCORE (Pitch variation, speech energy, modulation, pace, pauses)
+        tone_pitch_var = min(10.0, max(0.0, features.pitch_std / 4.0)) # ~20-30 std is good, maps 5-7.5
+        tone_energy = min(10.0, max(0.0, features.energy_mean * 150)) # 0.05 energy = 7.5
+        tone_modulation = 8.5 if features.pitch_contour in ["rising", "falling"] else 5.0
+        tone_pace = max(0.0, 10.0 - (rate_diff / 10.0))
+        tone_pauses = 10.0 if 0.1 < features.pause_ratio < 0.25 else 6.0
+        scores.tone_score = round((tone_pitch_var * 0.25) + (tone_energy * 0.2) + (tone_modulation * 0.2) + (tone_pace * 0.2) + (tone_pauses * 0.15), 1)
+        scores.tone_score = min(10.0, max(0.0, scores.tone_score))
+
+        # NEW 3. SPEAKING STYLE SCORE (Fluency, clarity, filler words, pace, pronunciation)
+        # We proxy fluency via rhythm regularity and pauses
+        style_fluency = min(10.0, max(0.0, features.rhythm_regularity * 10.0)) 
+        if style_fluency == 0: style_fluency = 7.0 # Default if librosa fails
+        style_clarity = clarity_score
+        # We proxy filler words via zero crossing rate inconsistency and extra pauses
+        style_fillers = max(0.0, 10.0 - (features.pause_ratio * 15)) 
+        style_pace = scores.pace
+        style_pronunciation = min(10.0, max(0.0, (features.spectral_rolloff / 800))) if features.spectral_rolloff else 7.0
+        scores.speaking_style_score = round((style_fluency * 0.25) + (style_clarity * 0.25) + (style_fillers * 0.2) + (style_pace * 0.15) + (style_pronunciation * 0.15), 1)
+        scores.speaking_style_score = min(10.0, max(0.0, scores.speaking_style_score))
+
+        # NEW 4. FINAL COMMUNICATION SCORE (Tone -> 30%, Emotion -> 30%, Speaking Style -> 40%)
+        # Emotion score based on confidence scale 0-1 mapped to 0-10
+        emotion_score = emotion_confidence * 10.0 if emotion_confidence > 0 else 7.5
+        scores.final_communication_score = round(
+            (scores.tone_score * 0.3) + 
+            (emotion_score * 0.3) + 
+            (scores.speaking_style_score * 0.4), 
+            1
         )
 
         return scores

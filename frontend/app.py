@@ -354,14 +354,15 @@ def render_emotion_badge(emotion: str):
     )
 
 
-def render_score_bar(score: int, label: str):
+def render_score_bar(score: float, label: str):
     """Render a visual score bar."""
     score_class = "score-high" if score >= 7 else "score-medium" if score >= 5 else "score-low"
+    display_score = f"{score:.1f}" if isinstance(score, float) else str(score)
     st.markdown(f"""
         <div style="margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span>{label}</span>
-                <span>{score}/10</span>
+                <span>{display_score}/10</span>
             </div>
             <div class="score-bar">
                 <div class="score-fill {score_class}" style="width: {score * 10}%;"></div>
@@ -777,9 +778,9 @@ def end_simulation(resolved: bool):
     voice_analyses = st.session_state.get("voice_analyses", [])
     avg_voice_scores = {}
     if voice_analyses:
-        for key in ["calmness", "confidence", "empathy", "pace", "clarity", "overall"]:
-            scores = [va.get("delivery_scores", {}).get(key, 5) for va in voice_analyses]
-            avg_voice_scores[key] = sum(scores) / len(scores) if scores else 5
+        for key in ["calmness", "confidence", "empathy", "pace", "clarity", "overall", "tone_score", "speaking_style_score", "final_communication_score", "emotion_confidence"]:
+            scores = [va.get("delivery_scores", {}).get(key, 5.0) if "emotion" not in key else va.get(key, 0.5) for va in voice_analyses]
+            avg_voice_scores[key] = sum(scores) / len(scores) if scores else 5.0
 
     # Store local session data for fallback analysis
     st.session_state.local_session_data = {
@@ -915,18 +916,27 @@ def render_feedback():
     voice_scores = local_data.get("avg_voice_scores", {})
 
     if voice_scores:
+        if "final_communication_score" in voice_scores:
+            st.markdown(f"### 🏆 Final Communication Score: {voice_scores.get('final_communication_score', 5.0):.1f} / 10")
+
         st.markdown("### 🎤 Voice Delivery")
 
         col1, col2 = st.columns(2)
 
         with col1:
-            render_score_bar(int(voice_scores.get("calmness", 5)), "Calmness")
-            render_score_bar(int(voice_scores.get("confidence", 5)), "Confidence")
-            render_score_bar(int(voice_scores.get("empathy", 5)), "Empathetic Tone")
+            if "tone_score" in voice_scores:
+                render_score_bar(voice_scores.get("tone_score", 5.0), "Tone Score")
+            else:
+                render_score_bar(float(voice_scores.get("calmness", 5)), "Calmness")
+                render_score_bar(float(voice_scores.get("empathy", 5)), "Empathetic Tone")
+            render_score_bar(float(voice_scores.get("confidence", 5)), "Confidence")
 
         with col2:
-            render_score_bar(int(voice_scores.get("pace", 5)), "Pace Control")
-            render_score_bar(int(voice_scores.get("clarity", 5)), "Clarity")
+            if "speaking_style_score" in voice_scores:
+                render_score_bar(voice_scores.get("speaking_style_score", 5.0), "Speaking Style")
+                
+            render_score_bar(float(voice_scores.get("pace", 5)), "Pace Control")
+            render_score_bar(float(voice_scores.get("clarity", 5)), "Clarity")
 
         # Voice emotion summary
         voice_analyses = local_data.get("voice_analyses", [])
@@ -938,8 +948,9 @@ def render_feedback():
 
             # Get dominant emotion
             dominant = max(emotion_counts, key=emotion_counts.get)
-            st.markdown(f"**Primary Voice Emotion:** {dominant.capitalize()} "
-                       f"({emotion_counts[dominant]}/{len(emotions)} responses)")
+            confidence_pct = int(voice_scores.get("emotion_confidence", 0.84) * 100)
+            
+            st.markdown(f"**Emotion:** {dominant.capitalize()} ({confidence_pct}%)")
 
     # Strengths
     st.markdown("### 💪 Strengths")

@@ -146,7 +146,7 @@ class VoiceAnalysisResponse(BaseModel):
     primary_emotion: str
     secondary_emotion: Optional[str] = None
     emotion_confidence: float
-    delivery_scores: Dict[str, int]
+    delivery_scores: Dict[str, float]
     acoustic_features: Dict[str, float]
     error_message: Optional[str] = None
 
@@ -592,12 +592,15 @@ async def analyze_voice(audio: UploadFile = File(...)):
             secondary_emotion=result.secondary_emotion.value if result.secondary_emotion else None,
             emotion_confidence=result.emotion_confidence,
             delivery_scores={
-                "calmness": result.delivery_scores.calmness,
-                "confidence": result.delivery_scores.confidence,
-                "empathy": result.delivery_scores.empathy,
-                "pace": result.delivery_scores.pace,
-                "clarity": result.delivery_scores.clarity,
-                "overall": result.delivery_scores.overall,
+                "calmness": float(result.delivery_scores.calmness),
+                "confidence": float(result.delivery_scores.confidence),
+                "empathy": float(result.delivery_scores.empathy),
+                "pace": float(result.delivery_scores.pace),
+                "clarity": float(result.delivery_scores.clarity),
+                "overall": float(result.delivery_scores.overall),
+                "tone_score": result.delivery_scores.tone_score,
+                "speaking_style_score": result.delivery_scores.speaking_style_score,
+                "final_communication_score": result.delivery_scores.final_communication_score,
             },
             acoustic_features={
                 "pitch_mean": result.features.pitch_mean,
