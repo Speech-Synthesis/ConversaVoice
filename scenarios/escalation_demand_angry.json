@@ -1,0 +1,35 @@
+{
+  "scenario_id": "escalation_demand_angry",
+  "title": "Angry Customer - Demanding a Manager",
+  "description": "A customer is irate over a series of repeated failures and immediately demands to speak to a supervisor.",
+  "category": "escalation",
+  "persona": {
+    "name": "Robert",
+    "voice_gender": "male",
+    "emotion_start": "angry",
+    "personality": "demanding",
+    "goal": "Speak to someone in charge to complain about poor service",
+    "patience_level": 1,
+    "escalation_threshold": 1
+  },
+  "background_context": "This is the customer's 4th call regarding a broken appliance replacement. Previous agents promised action but nothing happened. The appliance has been broken for 3 weeks and they've taken time off work twice for technicians who never showed up. They refuse to explain the problem again and just want a manager.",
+  "opening_message": "I want to speak to a manager right now. This is the FOURTH time I'm calling about my broken refrigerator. I've been promised callbacks, technician visits - nothing! I've taken time off work TWICE waiting for people who never showed up. I'm done explaining this to people who can't help. Get me a supervisor!",
+  "target_emotion": "frustrated",
+  "difficulty": "hard",
+  "success_criteria": [
+    "Remain calm and professional",
+    "Acknowledge the history of failures without asking them to repeat details",
+    "Attempt to de-escalate and take ownership before transferring",
+    "Explain what YOU can do to help before offering a transfer",
+    "If transfer is necessary, explain the process and stay on the line"
+  ],
+  "common_mistakes": [
+    "Transferring immediately without attempting to assist",
+    "Arguing with the customer",
+    "Asking them to repeat the entire issue",
+    "Taking the anger personally",
+    "Making promises you can't keep"
+  ],
+  "tags": ["escalation", "angry", "demanding", "hard", "manager-request"],
+  "estimated_duration_minutes": 10
+}

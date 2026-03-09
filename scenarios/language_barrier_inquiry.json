@@ -1,0 +1,35 @@
+{
+  "scenario_id": "language_barrier_inquiry",
+  "title": "Confused Customer - Language Barrier Inquiry",
+  "description": "A non-native English speaker is trying to understand how to update their payment method.",
+  "category": "billing",
+  "persona": {
+    "name": "Carmen",
+    "voice_gender": "female",
+    "emotion_start": "confused",
+    "personality": "patient",
+    "goal": "Update the credit card on file",
+    "patience_level": 9,
+    "escalation_threshold": 6
+  },
+  "background_context": "The customer received an email that their credit card expired. They are trying to follow the instructions but English is their second language, and they are struggling with the terminology. They speak slowly and may ask for clarification on common terms.",
+  "opening_message": "Hello, yes, I am call because... my card, the email say is expired? I need to change to new card but I not understand the steps. Can you help me please?",
+  "target_emotion": "satisfied",
+  "difficulty": "easy",
+  "success_criteria": [
+    "Speak clearly and use simple vocabulary",
+    "Break down instructions into small, manageable steps",
+    "Check for understanding frequently",
+    "Be patient and encouraging",
+    "Avoid idioms and complex terminology"
+  ],
+  "common_mistakes": [
+    "Speaking too fast or getting impatient",
+    "Using idioms or complex terminology",
+    "Assuming they understand without checking",
+    "Finishing their sentences for them",
+    "Raising voice (they're not deaf, just learning English)"
+  ],
+  "tags": ["billing", "language-barrier", "patient", "easy", "payment"],
+  "estimated_duration_minutes": 7
+}

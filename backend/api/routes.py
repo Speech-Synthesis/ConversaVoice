@@ -3,10 +3,12 @@
 import os
 import logging
 import uuid
+import json
+import asyncio
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from .models import (
     TranscribeResponse,
@@ -18,8 +20,15 @@ from .models import (
     HealthResponse
 )
 from ..services.orchestrator_service import orchestrator_service
+from ..utils.file_cleanup import cleanup_old_files
 
 logger = logging.getLogger(__name__)
+
+# Ensure audio directories exist
+UPLOADS_DIR = "uploads"
+GENERATED_AUDIO_DIR = "generated_audio"
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(GENERATED_AUDIO_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -32,9 +41,13 @@ async def health_check():
     Returns the status of all services.
     """
     try:
-        services = await orchestrator_service.get_health_status()
+        # Task 13: Improve Health Check Endpoint
+        # Check actual service reachability
+        services = await orchestrator_service.get_detailed_health()
+        status = "healthy" if all(s == "healthy" for s in services.values()) else "degraded"
+        
         return HealthResponse(
-            status="healthy",
+            status=status,
             services=services
         )
     except Exception as e:
@@ -49,6 +62,9 @@ async def create_session():
     
     Returns a new session ID.
     """
+    # Task 11: Clean up old files on new session
+    cleanup_old_files([UPLOADS_DIR, GENERATED_AUDIO_DIR])
+    
     session_id = str(uuid.uuid4())
     logger.info(f"Created new session: {session_id}")
     
@@ -56,6 +72,41 @@ async def create_session():
         session_id=session_id,
         created_at=datetime.now().isoformat()
     )
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Process chat text through LLM with SSE streaming. (Task 18)
+    """
+    session_id = request.session_id or str(uuid.uuid4())
+    
+    async def event_generator():
+        orchestrator = await orchestrator_service.get_orchestrator(session_id)
+        queue = asyncio.Queue()
+        
+        def on_token(token):
+            queue.put_nowait(token)
+            
+        task = asyncio.create_task(
+            orchestrator.process_text_stream(request.text, speak=False, on_token=on_token)
+        )
+        
+        try:
+            while not task.done() or not queue.empty():
+                try:
+                    token = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+                except asyncio.TimeoutError:
+                    continue
+            
+            result = await task
+            yield f"data: {json.dumps({'done': True, 'style': result.style, 'session_id': session_id})}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
@@ -143,7 +194,8 @@ async def synthesize(request: SynthesizeRequest):
             text=request.text,
             style=request.style,
             pitch=request.pitch,
-            rate=request.rate
+            rate=request.rate,
+            voice_gender=request.voice_gender
         )
         
         # Return URL to download the audio
@@ -169,8 +221,7 @@ async def get_audio(filename: str):
     Returns:
         Audio file
     """
-    import tempfile
-    audio_path = os.path.join(tempfile.gettempdir(), filename)
+    audio_path = os.path.join(GENERATED_AUDIO_DIR, filename)
     
     if not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")

@@ -4,7 +4,8 @@
   "description": "A customer is furious because their package has been delayed for 5 days with no updates. They need it for an important event tomorrow.",
   "category": "shipping",
   "persona": {
-    "name": "Michael",
+    "name": "Michelle",
+    "voice_gender": "female",
     "emotion_start": "angry",
     "personality": "impatient",
     "goal": "Get a refund or guaranteed delivery by tomorrow",
@@ -12,6 +13,8 @@
     "escalation_threshold": 2
   },
   "background_context": "The customer ordered a gift for their spouse's birthday, which is tomorrow. The package was supposed to arrive 5 days ago but tracking shows it's stuck at a distribution center with no updates for 3 days. They've already called twice before with no resolution. They paid for express shipping.",
+  "opening_message": "I've been waiting for my package for FIVE days now! The tracking hasn't updated in three days and my husband's birthday is TOMORROW. I paid extra for express shipping and this is the third time I'm calling about this. Where is my package?!",
+  "target_emotion": "hopeful",
   "difficulty": "hard",
   "success_criteria": [
     "Acknowledge the customer's frustration without being defensive",

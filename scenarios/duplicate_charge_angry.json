@@ -1,0 +1,33 @@
+{
+  "scenario_id": "duplicate_charge_angry",
+  "title": "Angry Customer - Double Charged",
+  "description": "A customer is furious because they were charged twice for their monthly subscription and their account is now overdrawn.",
+  "category": "billing",
+  "persona": {
+    "name": "Alex",
+    "voice_gender": "male",
+    "emotion_start": "angry",
+    "personality": "impatient",
+    "goal": "Get an immediate refund for the extra charge and an apology",
+    "patience_level": 2,
+    "escalation_threshold": 2
+  },
+  "background_context": "The customer's bank account was overdrawn because the company accidentally processed their $120 monthly payment twice. They incurred a $35 overdraft fee from their bank as a result. They just discovered this when their debit card was declined at the grocery store.",
+  "opening_message": "I am absolutely furious right now! You people charged me TWICE for my subscription - that's $240 instead of $120! My account is overdrawn and I just got embarrassed at the store because my card got declined. This is completely unacceptable! I want this fixed RIGHT NOW!",
+  "target_emotion": "satisfied",
+  "difficulty": "hard",
+  "success_criteria": [
+    "De-escalate the initial anger through active listening and empathy",
+    "Take immediate ownership of the mistake",
+    "Process the refund for the duplicate charge",
+    "Offer compensation for the bank overdraft fee"
+  ],
+  "common_mistakes": [
+    "Refusing to cover the overdraft fee, sticking strictly to policy",
+    "Reacting defensively to the customer's anger",
+    "Using stalling tactics instead of taking immediate action",
+    "Asking the customer to calm down"
+  ],
+  "tags": ["billing", "angry", "overdraft", "refund", "hard"],
+  "estimated_duration_minutes": 8
+}

@@ -17,15 +17,22 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """Client for communicating with ConversaVoice backend API."""
     
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
         """
         Initialize API client.
         
         Args:
             base_url: Base URL of the backend API (defaults to BACKEND_API_URL env var)
+            api_key: API secret key (defaults to API_SECRET_KEY env var)
         """
         self.base_url = base_url or os.getenv("BACKEND_API_URL", "http://localhost:8000")
+        self.api_key = api_key or os.getenv("API_SECRET_KEY")
         self.session_id: Optional[str] = None
+        
+        self.headers = {}
+        if self.api_key:
+            self.headers["X-API-Key"] = self.api_key
+            
         logger.info(f"Initialized API client with base URL: {self.base_url}")
     
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
@@ -68,7 +75,7 @@ class APIClient:
             Health status information
         """
         try:
-            response = requests.get(f"{self.base_url}/api/health", timeout=5)
+            response = requests.get(f"{self.base_url}/api/health", headers=self.headers, timeout=5)
             return self._handle_response(response)
         except Exception as e:
             logger.error(f"Health check failed: {e}")
@@ -82,7 +89,7 @@ class APIClient:
             Session ID
         """
         try:
-            response = requests.post(f"{self.base_url}/api/session", timeout=5)
+            response = requests.post(f"{self.base_url}/api/session", headers=self.headers, timeout=5)
             data = self._handle_response(response)
             self.session_id = data["session_id"]
             logger.info(f"Created session: {self.session_id}")
@@ -114,6 +121,7 @@ class APIClient:
                     f"{self.base_url}/api/transcribe",
                     files=files,
                     data=data,
+                    headers=self.headers,
                     timeout=30
                 )
             
@@ -147,6 +155,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
+                headers=self.headers,
                 timeout=120
             )
             
@@ -162,7 +171,8 @@ class APIClient:
         text: str,
         style: Optional[str] = None,
         pitch: Optional[str] = None,
-        rate: Optional[str] = None
+        rate: Optional[str] = None,
+        voice_gender: Optional[str] = None
     ) -> str:
         """
         Synthesize speech from text.
@@ -181,12 +191,14 @@ class APIClient:
                 "text": text,
                 "style": style,
                 "pitch": pitch,
-                "rate": rate
+                "rate": rate,
+                "voice_gender": voice_gender
             }
             
             response = requests.post(
                 f"{self.base_url}/api/synthesize",
                 json=payload,
+                headers=self.headers,
                 timeout=30
             )
             
@@ -207,7 +219,7 @@ class APIClient:
             output_path: Path to save audio file
         """
         try:
-            response = requests.get(audio_url, timeout=30)
+            response = requests.get(audio_url, headers=self.headers, timeout=30)
             response.raise_for_status()
             
             with open(output_path, "wb") as f:
@@ -226,6 +238,7 @@ class APIClient:
         try:
             response = requests.delete(
                 f"{self.base_url}/api/session/{self.session_id}",
+                headers=self.headers,
                 timeout=5
             )
             self._handle_response(response)

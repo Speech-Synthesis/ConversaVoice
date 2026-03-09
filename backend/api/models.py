@@ -38,6 +38,7 @@ class SynthesizeRequest(BaseModel):
     style: Optional[str] = Field(None, description="Emotional style label")
     pitch: Optional[str] = Field(None, description="Pitch adjustment")
     rate: Optional[str] = Field(None, description="Speech rate adjustment")
+    voice_gender: Optional[str] = Field(None, description="Voice gender (male/female)")
 
 
 class SynthesizeResponse(BaseModel):

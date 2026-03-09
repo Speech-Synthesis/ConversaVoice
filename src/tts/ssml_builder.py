@@ -121,17 +121,22 @@ class SSMLBuilder:
     Supports Azure Neural TTS with express-as styles and prosody control.
     """
 
-    # Default Azure Neural voice
-    DEFAULT_VOICE = "en-US-JennyNeural"
+    # Default Azure Neural voices
+    DEFAULT_FEMALE_VOICE = "en-US-JennyNeural"
+    DEFAULT_MALE_VOICE = "en-US-GuyNeural"
 
-    def __init__(self, voice: str = DEFAULT_VOICE):
+    def __init__(self, voice: Optional[str] = None, voice_gender: str = "female"):
         """
         Initialize SSML builder.
 
         Args:
-            voice: Azure Neural voice name (e.g., "en-US-JennyNeural")
+            voice: Azure Neural voice name (e.g., "en-US-JennyNeural"). If provided, overrides voice_gender.
+            voice_gender: "male" or "female". Used if voice is not provided.
         """
-        self.voice = voice
+        if voice:
+            self.voice = voice
+        else:
+            self.voice = self.DEFAULT_MALE_VOICE if voice_gender == "male" else self.DEFAULT_FEMALE_VOICE
 
     def build(
         self,
