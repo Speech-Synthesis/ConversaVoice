@@ -7,6 +7,7 @@ import tempfile
 from typing import Optional, Callable
 
 import numpy as np
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class GroqWhisperClient:
         self.silence_threshold = 0.01
         self.min_speech_duration = 0.5
         self._client = None
+        self._base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com")
         
     def _get_client(self):
         """Lazy load Groq client."""
@@ -83,6 +85,44 @@ class GroqWhisperClient:
         
         wav_buffer.seek(0)
         return wav_buffer.read()
+
+    def _transcribe_bytes(self, filename: str, audio_bytes: bytes) -> str:
+        """
+        Transcribe audio bytes with SDK when available, otherwise use direct HTTP.
+        """
+        client = self._get_client()
+
+        # Newer Groq SDKs expose audio.transcriptions.
+        audio_api = getattr(client, "audio", None)
+        transcriptions_api = getattr(audio_api, "transcriptions", None) if audio_api else None
+        if transcriptions_api is not None:
+            transcription = transcriptions_api.create(
+                file=(filename, audio_bytes),
+                model="whisper-large-v3",
+                response_format="json",
+                language="en"
+            )
+            return transcription.text.strip()
+
+        # groq==0.4.2 does not expose audio APIs; use OpenAI-compatible endpoint directly.
+        endpoint = f"{self._base_url.rstrip('/')}/openai/v1/audio/transcriptions"
+        response = requests.post(
+            endpoint,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            data={
+                "model": "whisper-large-v3",
+                "response_format": "json",
+                "language": "en"
+            },
+            files={"file": (filename, audio_bytes)},
+            timeout=60
+        )
+        response.raise_for_status()
+        payload = response.json()
+        text = payload.get("text", "").strip()
+        if not text:
+            raise STTError("Empty transcription response from Groq API")
+        return text
     
     def transcribe_audio(self, audio_array: np.ndarray, sample_rate: int = 16000) -> str:
         """
@@ -96,20 +136,9 @@ class GroqWhisperClient:
             Transcribed text
         """
         try:
-            client = self._get_client()
-            
             # Convert numpy array to WAV bytes
             wav_bytes = self._numpy_to_wav_bytes(audio_array, sample_rate)
-            
-            # Transcribe using Groq API
-            transcription = client.audio.transcriptions.create(
-                file=("audio.wav", wav_bytes),
-                model="whisper-large-v3",
-                response_format="json",
-                language="en"
-            )
-            
-            return transcription.text.strip()
+            return self._transcribe_bytes("audio.wav", wav_bytes)
             
         except Exception as e:
             logger.error(f"Groq transcription failed: {e}")
@@ -126,17 +155,9 @@ class GroqWhisperClient:
             Transcribed text
         """
         try:
-            client = self._get_client()
-            
             with open(filepath, "rb") as audio_file:
-                transcription = client.audio.transcriptions.create(
-                    file=(os.path.basename(filepath), audio_file.read()),
-                    model="whisper-large-v3",
-                    response_format="json",
-                    language="en"
-                )
-            
-            return transcription.text.strip()
+                audio_bytes = audio_file.read()
+            return self._transcribe_bytes(os.path.basename(filepath), audio_bytes)
             
         except Exception as e:
             logger.error(f"Groq file transcription failed: {e}")
