@@ -143,7 +143,8 @@ async def synthesize(request: SynthesizeRequest):
             text=request.text,
             style=request.style,
             pitch=request.pitch,
-            rate=request.rate
+            rate=request.rate,
+            voice_gender=request.voice_gender
         )
         
         # Return URL to download the audio

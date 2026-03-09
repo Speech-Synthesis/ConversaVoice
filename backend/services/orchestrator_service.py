@@ -109,6 +109,7 @@ class OrchestratorService:
         style: Optional[str] = None,
         pitch: Optional[str] = None,
         rate: Optional[str] = None,
+        voice_gender: Optional[str] = None,
         session_id: Optional[str] = None
     ) -> str:
         """
@@ -119,6 +120,7 @@ class OrchestratorService:
             style: Emotional style label
             pitch: Pitch adjustment
             rate: Speech rate adjustment
+            voice_gender: Voice gender (male/female)
             session_id: Optional session ID for context
             
         Returns:
@@ -139,6 +141,11 @@ class OrchestratorService:
         # Get TTS client
         tts_client = orchestrator._tts_client
         
+        # Update TTS Client gender if provided
+        if voice_gender:
+            tts_client.voice_gender = voice_gender
+            tts_client.ssml_builder.voice = tts_client.ssml_builder.DEFAULT_MALE_VOICE if voice_gender == "male" else tts_client.ssml_builder.DEFAULT_FEMALE_VOICE
+            
         # Build SSML with parameters
         ssml = tts_client.ssml_builder.build_from_llm_response(
             text=text,
@@ -171,14 +178,24 @@ class OrchestratorService:
     async def get_health_status(self) -> dict:
         """
         Get health status of all services.
-        
-        Returns:
-            Dictionary with service health status
         """
-        # Create a temporary orchestrator to check service health
         temp_session = "health-check"
         try:
-            orchestrator = await self.get_orchestrator(temp_session)
+            # Check if we already have one
+            async with self._lock:
+                if temp_session in self._orchestrators:
+                    orchestrator = self._orchestrators[temp_session]
+                else:
+                    # Initialize lazily without waiting for all connections immediately if possible
+                    # Or just return basic info here to avoid timeout
+                    return {
+                        "status": "Starting up",
+                        "stt": "unknown",
+                        "llm": "unknown",
+                        "tts": "unknown",
+                        "fallback_status": {}
+                    }
+                    
             fallback_status = orchestrator.get_fallback_status()
             
             return {
@@ -206,7 +223,8 @@ class OrchestratorService:
         async with self._lock:
             if session_id in self._orchestrators:
                 logger.info(f"Cleaning up session: {session_id}")
-                # Could add cleanup logic here if needed
+                orchestrator = self._orchestrators[session_id]
+                await orchestrator.shutdown()
                 del self._orchestrators[session_id]
 
 

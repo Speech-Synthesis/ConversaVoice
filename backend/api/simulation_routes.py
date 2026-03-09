@@ -2,8 +2,9 @@
 
 import logging
 from typing import Optional, List, Dict
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request
 from pydantic import BaseModel, Field
+from backend.limiter import limiter
 
 from src.simulation import (
     ScenarioEngine,
@@ -248,7 +249,8 @@ async def list_categories():
 # ============================================================================
 
 @router.post("/start", response_model=StartSimulationResponse)
-async def start_simulation(request: StartSimulationRequest):
+@limiter.limit("20/minute")
+async def start_simulation(request: Request, body: StartSimulationRequest):
     """
     Start a new simulation session.
 
@@ -260,8 +262,8 @@ async def start_simulation(request: StartSimulationRequest):
 
         # Start the simulation
         session = controller.start_simulation(
-            scenario_id=request.scenario_id,
-            trainee_id=request.trainee_id,
+            scenario_id=body.scenario_id,
+            trainee_id=body.trainee_id,
         )
 
         # Get opening message
@@ -273,13 +275,14 @@ async def start_simulation(request: StartSimulationRequest):
         # Get scenario for customer name
         scenario = controller.current_scenario
 
-        logger.info(f"Started simulation: {session.session_id} for scenario: {request.scenario_id}")
+        logger.info(f"Started simulation: {session.session_id} for scenario: {body.scenario_id}")
 
         return StartSimulationResponse(
             session_id=session.session_id,
             scenario_id=session.scenario_id,
             scenario_title=session.scenario_title,
             customer_name=scenario.persona.name,
+            voice_gender=getattr(scenario.persona, "voice_gender", "female"),
             initial_emotion=opening.emotion_state.value,
             opening_message=opening.customer_message,
             prosody=opening.prosody,
@@ -295,17 +298,18 @@ async def start_simulation(request: StartSimulationRequest):
 
 
 @router.post("/respond", response_model=SimulationTurnResponse)
-async def process_trainee_response(request: TraineeInputRequest):
+@limiter.limit("40/minute")
+async def process_trainee_response(request: Request, body: TraineeInputRequest):
     """
     Process trainee's response and get customer's reply.
 
     Returns the customer's response with updated emotional state.
     """
     try:
-        controller = get_active_controller(request.session_id)
+        controller = get_active_controller(body.session_id)
 
         # Process the trainee's input
-        response = await controller.process_trainee_input_async(request.message)
+        response = await controller.process_trainee_input_async(body.message)
 
         # Extract completion status
         completion_status = response.completion_status
@@ -318,6 +322,7 @@ async def process_trainee_response(request: TraineeInputRequest):
             emotion_changed=response.emotion_changed,
             previous_emotion=response.previous_emotion.value if response.previous_emotion else None,
             prosody=response.prosody,
+            voice_gender=controller.current_scenario.persona.voice_gender if hasattr(controller.current_scenario.persona, "voice_gender") else "female",
             turn_number=response.turn_number,
             detected_techniques=response.trainee_analysis.detected_techniques,
             detected_issues=response.trainee_analysis.detected_issues,
@@ -337,18 +342,19 @@ async def process_trainee_response(request: TraineeInputRequest):
 
 
 @router.post("/end", response_model=SessionSummary)
-async def end_simulation(request: EndSimulationRequest):
+@limiter.limit("20/minute")
+async def end_simulation(request: Request, body: EndSimulationRequest):
     """
     End the current simulation session.
 
     Returns session summary and triggers analysis.
     """
     try:
-        controller = get_active_controller(request.session_id)
+        controller = get_active_controller(body.session_id)
 
         # End the simulation
         session = controller.end_simulation(
-            resolution_achieved=request.resolution_achieved,
+            resolution_achieved=body.resolution_achieved,
             reason="completed"
         )
 
@@ -361,10 +367,10 @@ async def end_simulation(request: EndSimulationRequest):
             # Continue anyway - session data is still in memory
 
         # Remove from active simulations
-        if request.session_id in _active_simulations:
-            del _active_simulations[request.session_id]
+        if body.session_id in _active_simulations:
+            del _active_simulations[body.session_id]
 
-        logger.info(f"Ended simulation: {request.session_id}")
+        logger.info(f"Ended simulation: {body.session_id}")
 
         return SessionSummary(
             session_id=session.session_id,

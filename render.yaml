@@ -15,10 +15,11 @@ services:
         sync: false # Set this in the Render dashboard
       - key: AZURE_SPEECH_REGION
         sync: false # Set this in the Render dashboard
-      - key: REDIS_HOST
-        value: red-d68scf4r85hc73d1fgkg
-      - key: REDIS_PORT
-        value: "6379"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: conversavoice-redis
+          property: connectionString
       - key: STT_BACKEND
         value: groq
 

@@ -1,0 +1,35 @@
+{
+    "scenario_id": "positive_feedback",
+    "title": "Happy Customer - Service Compliment",
+    "description": "A customer is calling simply to compliment a previous representative and ask a very simple account question.",
+    "category": "general",
+    "persona": {
+        "name": "Emma",
+        "voice_gender": "female",
+        "emotion_start": "satisfied",
+        "personality": "friendly",
+        "goal": "Leave a compliment and check their account balance",
+        "patience_level": 10,
+        "escalation_threshold": 8
+    },
+    "background_context": "The customer had a great experience last week with an agent named 'John'. She wants to make sure John gets recognized, and she also wants to know her current reward points balance.",
+    "difficulty": "easy",
+    "success_criteria": [
+        "Accept the compliment graciously",
+        "Assure the customer the feedback will be passed on",
+        "Provide the requested account information quickly",
+        "Maintain a warm and friendly tone"
+    ],
+    "common_mistakes": [
+        "Being entirely robotic",
+        "Rushing through the compliment to get to the account question",
+        "Forgetting to pass on the feedback"
+    ],
+    "tags": [
+        "positive",
+        "compliment",
+        "easy",
+        "general"
+    ],
+    "estimated_duration_minutes": 3
+}

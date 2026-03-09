@@ -65,15 +65,16 @@ class AzureTTSClient:
         self,
         speech_key: Optional[str] = None,
         speech_region: Optional[str] = None,
-        voice: str = "en-US-JennyNeural"
+        voice: Optional[str] = None,
+        voice_gender: str = "female"
     ):
         """
         Initialize Azure TTS client.
 
         Args:
-            speech_key: Azure Speech API key (defaults to AZURE_SPEECH_KEY env var)
             speech_region: Azure region (defaults to AZURE_SPEECH_REGION env var)
-            voice: Azure Neural voice name
+            voice: Azure Neural voice name. If provided, overrides voice_gender.
+            voice_gender: "male" or "female". Used if voice is not provided.
         """
         self.speech_key = speech_key or os.getenv("AZURE_SPEECH_KEY")
         self.speech_region = speech_region or os.getenv("AZURE_SPEECH_REGION")
@@ -91,7 +92,8 @@ class AzureTTSClient:
             )
 
         self.voice = voice
-        self.ssml_builder = SSMLBuilder(voice=voice)
+        self.voice_gender = voice_gender
+        self.ssml_builder = SSMLBuilder(voice=voice, voice_gender=voice_gender)
 
         # Initialize speech config
         self._speech_config = self._create_speech_config()
