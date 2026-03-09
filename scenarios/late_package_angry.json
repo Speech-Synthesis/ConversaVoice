@@ -13,6 +13,8 @@
     "escalation_threshold": 2
   },
   "background_context": "The customer ordered a gift for their spouse's birthday, which is tomorrow. The package was supposed to arrive 5 days ago but tracking shows it's stuck at a distribution center with no updates for 3 days. They've already called twice before with no resolution. They paid for express shipping.",
+  "opening_message": "I've been waiting for my package for FIVE days now! The tracking hasn't updated in three days and my husband's birthday is TOMORROW. I paid extra for express shipping and this is the third time I'm calling about this. Where is my package?!",
+  "target_emotion": "hopeful",
   "difficulty": "hard",
   "success_criteria": [
     "Acknowledge the customer's frustration without being defensive",
@@ -28,12 +30,6 @@
     "Using corporate jargon instead of empathetic language",
     "Failing to take ownership of the problem"
   ],
-  "tags": [
-    "shipping",
-    "angry",
-    "escalation",
-    "refund",
-    "time-sensitive"
-  ],
+  "tags": ["shipping", "angry", "escalation", "refund", "time-sensitive"],
   "estimated_duration_minutes": 8
 }

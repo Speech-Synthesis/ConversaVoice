@@ -54,6 +54,10 @@ class PersonaConfig(BaseModel):
     """Configuration for a customer persona."""
 
     name: str = Field(default="Customer", description="Customer's name")
+    voice_gender: str = Field(
+        default="female",
+        description="Voice gender for TTS ('male' or 'female')"
+    )
     emotion_start: EmotionState = Field(
         default=EmotionState.NEUTRAL,
         description="Initial emotional state"

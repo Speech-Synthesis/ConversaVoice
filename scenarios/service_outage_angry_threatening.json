@@ -13,6 +13,8 @@
     "escalation_threshold": 2
   },
   "background_context": "The customer runs an e-commerce business and has been experiencing intermittent service outages for 3 hours during their peak sales period (Black Friday). They estimate losing $500+ per hour. They've been transferred twice already and had to explain the problem each time. They're a premium tier customer paying $299/month and are seriously considering switching to a competitor they've been researching.",
+  "opening_message": "This is absolutely unacceptable! I've been dealing with outages for THREE HOURS during Black Friday and I'm losing hundreds of dollars every hour! I've already explained this to two other people who couldn't help. I pay $299 a month for premium service and this is what I get? I'm already looking at your competitors. You have about 5 minutes to give me a real solution before I cancel everything!",
+  "target_emotion": "hopeful",
   "difficulty": "expert",
   "success_criteria": [
     "Immediately acknowledge the severity and business impact",
@@ -29,17 +31,8 @@
     "Minimizing the business impact",
     "Making promises you can't keep about resolution time",
     "Getting defensive when threatened with cancellation",
-    "Offering inadequate compensation",
-    "Failing to follow up with updates"
+    "Offering inadequate compensation"
   ],
-  "tags": [
-    "technical",
-    "angry",
-    "threatening",
-    "business-customer",
-    "retention",
-    "compensation",
-    "expert"
-  ],
+  "tags": ["technical", "angry", "threatening", "business-customer", "retention", "compensation", "expert"],
   "estimated_duration_minutes": 12
 }

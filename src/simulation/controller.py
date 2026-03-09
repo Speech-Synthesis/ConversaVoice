@@ -228,6 +228,7 @@ class SimulationController:
         system_prompt = self._build_system_prompt(is_opening=True)
         user_prompt = "Generate your opening message as the customer. Start the conversation based on your situation and emotional state."
 
+        response = None  # Initialize to avoid UnboundLocalError
         try:
             response = llm_client.chat(user_prompt, context=system_prompt)
             customer_message = self._extract_message(response)
@@ -298,6 +299,7 @@ class SimulationController:
         system_prompt = self._build_system_prompt()
         context = self._build_conversation_context()
 
+        response = None  # Initialize to avoid UnboundLocalError
         try:
             response = llm_client.chat(trainee_message, context=f"{system_prompt}\n\n{context}")
             customer_message = self._extract_message(response)
@@ -522,7 +524,24 @@ This is your first message to customer service. Express your {self._persona_engi
         return message
 
     def _get_fallback_opening(self) -> str:
-        """Get a fallback opening message based on emotion."""
+        """Get a fallback opening message - prefer scenario's opening_message if available."""
+        # First, try to use the scenario's predefined opening message
+        if self._scenario:
+            # Check if scenario has opening_message (it's in the JSON but not the model)
+            scenario_dict = self._scenario.model_dump() if hasattr(self._scenario, 'model_dump') else {}
+            if hasattr(self._scenario, '__dict__'):
+                # Try to get opening_message from the raw scenario data
+                pass
+
+        # Also check the scenario engine for the raw JSON data
+        try:
+            raw_scenario = self.scenario_engine.get_scenario_raw(self._scenario.scenario_id)
+            if raw_scenario and 'opening_message' in raw_scenario:
+                return raw_scenario['opening_message']
+        except (AttributeError, KeyError):
+            pass
+
+        # Fallback to emotion-based defaults
         emotion = self._persona_engine.current_emotion
         fallbacks = {
             EmotionState.ANGRY: "I've been waiting forever to talk to someone! This is absolutely unacceptable!",
@@ -530,6 +549,8 @@ This is your first message to customer service. Express your {self._persona_engi
             EmotionState.ANXIOUS: "Hello, I'm calling because I'm worried about my account. Can someone help me?",
             EmotionState.CONFUSED: "Hi, I'm a bit confused about something and hoping you can clarify.",
             EmotionState.NEUTRAL: "Hello, I'm calling about an issue I need help with.",
+            EmotionState.SATISFIED: "Hi there! I'm calling with some positive feedback today.",
+            EmotionState.HOPEFUL: "Hello, I'm hoping you can help me with something.",
         }
         return fallbacks.get(emotion, fallbacks[EmotionState.NEUTRAL])
 
