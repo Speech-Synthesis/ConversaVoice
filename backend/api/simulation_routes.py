@@ -536,7 +536,7 @@ async def get_quick_score(session_id: str):
 
 
 @router.get("/analysis/{session_id}/report")
-async def get_analysis_report(session_id: str, format: str = Query("text", regex="^(text|markdown|json)$")):
+async def get_analysis_report(session_id: str, format: str = Query("text", pattern="^(text|markdown|json)$")):
     """
     Get formatted analysis report.
 
@@ -647,7 +647,7 @@ async def list_sessions(
 @router.get("/sessions/{session_id}/transcript")
 async def get_session_transcript(
     session_id: str,
-    format: str = Query("text", regex="^(text|markdown|json)$")
+    format: str = Query("text", pattern="^(text|markdown|json)$")
 ):
     """Get the full transcript of a session."""
     try:
