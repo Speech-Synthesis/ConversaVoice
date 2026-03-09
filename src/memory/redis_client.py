@@ -190,6 +190,13 @@ class RedisClient:
         """Get the Redis client instance."""
         return self._get_client()
 
+    def ping(self) -> bool:
+        """Ping Redis to check connection."""
+        try:
+            return self.client.ping()
+        except Exception:
+            return False
+
     def is_connected(self) -> bool:
         """Check if Redis connection is alive."""
         try:

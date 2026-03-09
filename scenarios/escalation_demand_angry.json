@@ -1,0 +1,35 @@
+{
+    "scenario_id": "escalation_demand_angry",
+    "title": "Angry Customer - Demanding a Manager",
+    "description": "A customer is irate over a series of repeated failures and immediately demands to speak to a supervisor.",
+    "category": "escalation",
+    "persona": {
+        "name": "Robert",
+        "voice_gender": "male",
+        "emotion_start": "angry",
+        "personality": "demanding",
+        "goal": "Speak to someone in charge to complain about poor service",
+        "patience_level": 1,
+        "escalation_threshold": 1
+    },
+    "background_context": "This is the customer's 4th call regarding a broken appliance replacement. Previous agents promised action but nothing happened. They refuse to explain the problem again and just want a manager.",
+    "difficulty": "hard",
+    "success_criteria": [
+        "Remain calm and professional",
+        "Acknowledge the history of failures",
+        "Attempt to de-escalate and take ownership before transferring",
+        "Explain the transfer process clearly if they insist on a manager"
+    ],
+    "common_mistakes": [
+        "Transferring immediately without attempting to assist",
+        "Arguing with the customer",
+        "Asking them to repeat the entire issue"
+    ],
+    "tags": [
+        "escalation",
+        "angry",
+        "demanding",
+        "hard"
+    ],
+    "estimated_duration_minutes": 10
+}

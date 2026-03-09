@@ -4,7 +4,8 @@
   "description": "A customer wants to return a product that doesn't fit their needs. They are calm and reasonable but need guidance on the return process.",
   "category": "returns",
   "persona": {
-    "name": "David",
+    "name": "Danielle",
+    "voice_gender": "female",
     "emotion_start": "neutral",
     "personality": "patient",
     "goal": "Successfully return the product and get a refund",
@@ -28,6 +29,11 @@
     "Not confirming the customer understands the next steps",
     "Missing opportunity to suggest alternative products"
   ],
-  "tags": ["returns", "calm", "straightforward", "beginner-friendly"],
+  "tags": [
+    "returns",
+    "calm",
+    "straightforward",
+    "beginner-friendly"
+  ],
   "estimated_duration_minutes": 4
 }

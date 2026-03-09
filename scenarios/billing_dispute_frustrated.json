@@ -5,6 +5,7 @@
   "category": "billing",
   "persona": {
     "name": "Sarah",
+    "voice_gender": "female",
     "emotion_start": "frustrated",
     "personality": "analytical",
     "goal": "Understand the charge and get it removed if it's an error",

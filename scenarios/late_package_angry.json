@@ -4,7 +4,8 @@
   "description": "A customer is furious because their package has been delayed for 5 days with no updates. They need it for an important event tomorrow.",
   "category": "shipping",
   "persona": {
-    "name": "Michael",
+    "name": "Michelle",
+    "voice_gender": "female",
     "emotion_start": "angry",
     "personality": "impatient",
     "goal": "Get a refund or guaranteed delivery by tomorrow",
@@ -27,6 +28,12 @@
     "Using corporate jargon instead of empathetic language",
     "Failing to take ownership of the problem"
   ],
-  "tags": ["shipping", "angry", "escalation", "refund", "time-sensitive"],
+  "tags": [
+    "shipping",
+    "angry",
+    "escalation",
+    "refund",
+    "time-sensitive"
+  ],
   "estimated_duration_minutes": 8
 }

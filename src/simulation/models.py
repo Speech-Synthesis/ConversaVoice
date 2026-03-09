@@ -36,6 +36,9 @@ class PersonalityTrait(str, Enum):
     EMOTIONAL = "emotional"
     DEMANDING = "demanding"
     EASYGOING = "easygoing"
+    FRIENDLY = "friendly"
+    DIRECT = "direct"
+    ANXIOUS = "anxious"
 
 
 class DifficultyLevel(str, Enum):

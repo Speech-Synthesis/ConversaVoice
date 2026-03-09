@@ -5,6 +5,7 @@
   "category": "technical",
   "persona": {
     "name": "Jennifer",
+    "voice_gender": "female",
     "emotion_start": "angry",
     "personality": "demanding",
     "goal": "Get immediate resolution and compensation for losses",
@@ -31,6 +32,14 @@
     "Offering inadequate compensation",
     "Failing to follow up with updates"
   ],
-  "tags": ["technical", "angry", "threatening", "business-customer", "retention", "compensation", "expert"],
+  "tags": [
+    "technical",
+    "angry",
+    "threatening",
+    "business-customer",
+    "retention",
+    "compensation",
+    "expert"
+  ],
   "estimated_duration_minutes": 12
 }
