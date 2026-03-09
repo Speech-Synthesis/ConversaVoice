@@ -256,17 +256,18 @@ Respond with ONLY a valid JSON object in this exact format:
 
     def _get_fallback_analysis(self, session: Optional[SimulationSession]) -> Dict[str, Any]:
         """Generate fallback analysis when LLM fails."""
+        # Return zeros/empty to indicate analysis failed - don't give fake scores
         return {
-            "empathy_score": 5,
-            "de_escalation_score": 5,
-            "communication_clarity_score": 5,
-            "problem_solving_score": 5,
-            "efficiency_score": 5,
-            "strengths": ["Completed the simulation"],
-            "areas_for_improvement": ["Analysis unavailable - please review manually"],
-            "specific_feedback": ["Unable to generate detailed feedback at this time"],
-            "recommended_training": ["General customer service skills"],
-            "customer_satisfaction_predicted": "medium"
+            "empathy_score": 0,
+            "de_escalation_score": 0,
+            "communication_clarity_score": 0,
+            "problem_solving_score": 0,
+            "efficiency_score": 0,
+            "strengths": ["[Analysis Failed] Unable to evaluate - LLM service unavailable"],
+            "areas_for_improvement": ["[Analysis Failed] Please retry or review manually"],
+            "specific_feedback": ["[Analysis Failed] The AI analysis service encountered an error. Please check your API configuration and try again."],
+            "recommended_training": ["Retry analysis when service is available"],
+            "customer_satisfaction_predicted": "unknown"
         }
 
     def _build_analysis_result(

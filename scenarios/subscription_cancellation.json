@@ -1,35 +1,35 @@
 {
-    "scenario_id": "subscription_cancellation",
-    "title": "Neutral Customer - Wants to Cancel Subscription",
-    "description": "A customer is calling to cancel their premium subscription because they no longer use the service.",
-    "category": "retention",
-    "persona": {
-        "name": "James",
-        "voice_gender": "male",
-        "emotion_start": "neutral",
-        "personality": "direct",
-        "goal": "Cancel the subscription without hassle",
-        "patience_level": 6,
-        "escalation_threshold": 4
-    },
-    "background_context": "The customer has been subscribed for 6 months but hasn't logged in for the last 2 months. They want to cancel before their renewal next week. They are open to staying if there's a significant discount or a pause option.",
-    "difficulty": "medium",
-    "success_criteria": [
-        "Acknowledge the cancellation request promptly",
-        "Ask polite probing questions to understand why",
-        "Offer an alternative like pausing the account or a discount",
-        "Process the cancellation smoothly if they decline the offer"
-    ],
-    "common_mistakes": [
-        "Being overly pushy to retain them",
-        "Making the cancellation process difficult",
-        "Failing to ask why they are leaving"
-    ],
-    "tags": [
-        "cancellation",
-        "retention",
-        "neutral",
-        "negotiation"
-    ],
-    "estimated_duration_minutes": 5
+  "scenario_id": "subscription_cancellation",
+  "title": "Neutral Customer - Wants to Cancel Subscription",
+  "description": "A customer is calling to cancel their premium subscription because they no longer use the service.",
+  "category": "retention",
+  "persona": {
+    "name": "James",
+    "voice_gender": "male",
+    "emotion_start": "neutral",
+    "personality": "direct",
+    "goal": "Cancel the subscription without hassle",
+    "patience_level": 6,
+    "escalation_threshold": 4
+  },
+  "background_context": "The customer has been subscribed for 6 months but hasn't logged in for the last 2 months. They want to cancel before their renewal next week. They are open to staying if there's a significant discount or a pause option, but they don't want to be pressured.",
+  "opening_message": "Hi, I need to cancel my premium subscription. I haven't really been using it for the past couple months and my renewal is coming up next week. Can you help me cancel?",
+  "target_emotion": "satisfied",
+  "difficulty": "medium",
+  "success_criteria": [
+    "Acknowledge the cancellation request promptly",
+    "Ask ONE polite question to understand why (not multiple)",
+    "Mention alternatives like pausing or a discount WITHOUT being pushy",
+    "Process the cancellation smoothly if they decline offers",
+    "Confirm cancellation and any final billing details"
+  ],
+  "common_mistakes": [
+    "Being overly pushy to retain them",
+    "Making the cancellation process difficult or confusing",
+    "Asking too many questions about why they're leaving",
+    "Making them feel guilty for cancelling",
+    "Not confirming when the cancellation takes effect"
+  ],
+  "tags": ["cancellation", "retention", "neutral", "negotiation"],
+  "estimated_duration_minutes": 5
 }

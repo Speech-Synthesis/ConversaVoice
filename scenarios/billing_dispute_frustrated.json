@@ -13,6 +13,8 @@
     "escalation_threshold": 3
   },
   "background_context": "The customer has been a loyal subscriber for 2 years. They noticed a $49.99 charge labeled 'Premium Add-on' that they don't remember authorizing. They're worried this might be a recurring charge they didn't agree to. They checked their email but couldn't find any confirmation.",
+  "opening_message": "Hi, I really need some help here. I'm looking at my statement and there's a $49.99 charge for something called 'Premium Add-on' that I definitely didn't sign up for. I've been a customer for two years and I've never seen this before. Can you explain what this is?",
+  "target_emotion": "satisfied",
   "difficulty": "medium",
   "success_criteria": [
     "Listen carefully to understand the specific concern",

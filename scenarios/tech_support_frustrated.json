@@ -1,35 +1,34 @@
 {
-    "scenario_id": "tech_support_frustrated",
-    "title": "Frustrated Customer - Internet Keeps Dropping",
-    "description": "A customer working from home is experiencing intermittent internet drops and is frustrated. Needs troubleshooting guidance.",
-    "category": "technical",
-    "persona": {
-        "name": "Sarah",
-        "voice_gender": "female",
-        "emotion_start": "frustrated",
-        "personality": "anxious",
-        "goal": "Get the internet connection stabilized so they can work",
-        "patience_level": 4,
-        "escalation_threshold": 3
-    },
-    "background_context": "The customer has been experiencing internet drops every 30 minutes since yesterday morning. They work from home and just got disconnected from an important video call. They have already tried restarting their router once.",
-    "difficulty": "medium",
-    "success_criteria": [
-        "Acknowledge the impact of the issue on their work",
-        "Guide them through advanced troubleshooting steps",
-        "Set expectations for resolution",
-        "Offer checking for local outages"
-    ],
-    "common_mistakes": [
-        "Using overly technical jargon",
-        "Asking them to restart the router again without acknowledging they already did",
-        "Being dismissive of their anxiety"
-    ],
-    "tags": [
-        "technical",
-        "frustrated",
-        "internet",
-        "wfh"
-    ],
-    "estimated_duration_minutes": 8
+  "scenario_id": "tech_support_frustrated",
+  "title": "Frustrated Customer - Internet Keeps Dropping",
+  "description": "A customer working from home is experiencing intermittent internet drops and is frustrated. Needs troubleshooting guidance.",
+  "category": "technical",
+  "persona": {
+    "name": "David",
+    "voice_gender": "male",
+    "emotion_start": "frustrated",
+    "personality": "anxious",
+    "goal": "Get the internet connection stabilized so they can work",
+    "patience_level": 4,
+    "escalation_threshold": 3
+  },
+  "background_context": "The customer has been experiencing internet drops every 30 minutes since yesterday morning. They work from home and just got disconnected from an important video call with their boss. They have already tried restarting their router once.",
+  "opening_message": "I'm so frustrated right now. My internet keeps dropping every half hour and I just got kicked out of a video call with my boss! I already restarted my router but it's still happening. I work from home and I can't keep losing connection like this. Please help!",
+  "target_emotion": "hopeful",
+  "difficulty": "medium",
+  "success_criteria": [
+    "Acknowledge the impact of the issue on their work",
+    "Guide them through advanced troubleshooting steps",
+    "Check for local outages or known issues",
+    "Set clear expectations for resolution",
+    "Offer a callback or follow-up if issue persists"
+  ],
+  "common_mistakes": [
+    "Using overly technical jargon",
+    "Asking them to restart the router again without acknowledging they already did",
+    "Being dismissive of their anxiety about work",
+    "Not explaining why each troubleshooting step matters"
+  ],
+  "tags": ["technical", "frustrated", "internet", "work-from-home", "troubleshooting"],
+  "estimated_duration_minutes": 8
 }

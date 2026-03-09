@@ -140,6 +140,36 @@ class ScenarioEngine:
 
         return self._scenarios[scenario_id]
 
+    def get_scenario_raw(self, scenario_id: str) -> Dict[str, Any]:
+        """
+        Get raw scenario JSON data including extra fields like opening_message.
+
+        Args:
+            scenario_id: Unique scenario identifier.
+
+        Returns:
+            Raw dictionary from JSON file.
+
+        Raises:
+            ScenarioError: If scenario not found.
+        """
+        self.load_scenarios()
+
+        if scenario_id not in self._scenarios:
+            raise ScenarioError(
+                f"Scenario not found: {scenario_id}",
+                scenario_id=scenario_id
+            )
+
+        # Load the raw JSON to get extra fields not in the model
+        filepath = self.scenarios_dir / f"{scenario_id}.json"
+        if filepath.exists():
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        # Fallback to model dump if file not found
+        return self._scenarios[scenario_id].model_dump()
+
     def list_scenarios(
         self,
         category: Optional[str] = None,
